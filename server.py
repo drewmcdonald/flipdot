@@ -1,3 +1,7 @@
+import json
+import pathlib
+import sys
+
 from dotenv import load_dotenv
 
 from flipdot.create_app import create_app
@@ -27,3 +31,7 @@ load_dotenv()
 server = create_app(
     Panel([[1], [2]]), default_mode=DisplayModeRef(name="clock"), debug=True
 )
+
+# on startup, write the openapi schema to the server_schema.json file
+if len(sys.argv) > 1:
+    pathlib.Path(sys.argv[1]).write_text(json.dumps(server.openapi(), indent=2))

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Ensure we're in the project root directory
+cd "$(dirname "$0")/.."
+
+# Run the server as main to codegen
+poetry run python server.py server_schema.json
+
+pushd frontend
+bunx openapi-typescript ../server_schema.json -o ./src/api/schema.d.ts
+popd
