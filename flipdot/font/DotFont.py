@@ -1,25 +1,24 @@
-import logging
 import pathlib
 from functools import lru_cache
 from typing import Union
 
 import freetype  # type: ignore
 import numpy as np
+from fastapi.logger import logger
 
-from ..util import prettify_dot_matrix
-
-logger = logging.getLogger(__name__)
+from flipdot.types import DotMatrix
+from flipdot.util import prettify_dot_matrix
 
 
 class DotChar:
     def __init__(
         self,
         char: Union[str, None],
-        dot_matrix: np.ndarray[np.uint8, np.dtype[np.uint8]],
+        dot_matrix: DotMatrix,
     ):
         self.char = char
         self.dot_matrix = dot_matrix
-        self.height, self.width = dot_matrix.shape
+        self.height, self.width = np.shape(dot_matrix)
 
     def __str__(self):
         return prettify_dot_matrix(self.dot_matrix)
@@ -29,12 +28,14 @@ class DotChar:
 
 
 class DotFont:
+
     def __init__(
         self,
         font_path: pathlib.Path,
         src_height: int,
         space_width: Union[int, None] = None,
         width_between_chars: Union[int, None] = None,
+        warm_cache: bool = True,
     ):
         self.face = freetype.Face(str(font_path))
         self.face.set_char_size(src_height * 64)
@@ -53,6 +54,10 @@ class DotFont:
         self.space = DotChar(
             " ", np.zeros((self.line_height, self.space_width), dtype=np.uint8)
         )
+        # warm the cache of characters with basic alphanumeric characters
+        if warm_cache:
+            chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            self.get_chars(chars)
 
     @lru_cache(maxsize=100)
     def get_char(self, char: str) -> DotChar:
@@ -85,7 +90,7 @@ class DotFont:
         # Place the bitmap in the centered array
         dots[top_offset:bottom_offset, : bitmap.width] = bitmap_array
 
-        mat = (dots > 0).astype(int)
+        mat: DotMatrix = (dots > 0).astype(int)  # type: ignore
 
         return DotChar(char, mat)  # threshold at 0 since we assume dot matrix fonts
 
