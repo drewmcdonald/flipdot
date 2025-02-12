@@ -1,6 +1,8 @@
 import pathlib
 
-from flipdot.font.DotFont import DotFont
+from pydantic import BaseModel
+
+from flipdot.font.DotFont import DotFont, DotFontRef
 
 FONTS_DIR = pathlib.Path(__file__).parent / "fonts"
 
@@ -59,3 +61,12 @@ def register_font(
         space_width,
         width_between_chars,
     )
+
+
+class FontList(BaseModel):
+
+    fonts: dict[str, DotFontRef]
+
+
+def list_fonts() -> FontList:
+    return FontList(fonts={name: font.to_ref() for name, font in registry.items()})

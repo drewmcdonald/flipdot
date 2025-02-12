@@ -32,7 +32,7 @@ class CurrentWeatherData(BaseModel):
 class Weather(BaseDisplayMode):
     """A display mode that shows the current weather."""
 
-    mode_name: ClassVar[str] = "scroll_text"
+    mode_name: ClassVar[str] = "weather"
 
     tick_interval = 1
 

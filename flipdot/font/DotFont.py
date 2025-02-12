@@ -5,6 +5,7 @@ from typing import Union
 import freetype  # type: ignore
 import numpy as np
 from fastapi.logger import logger
+from pydantic import BaseModel
 
 from flipdot.types import DotMatrix
 from flipdot.util import prettify_dot_matrix
@@ -25,6 +26,13 @@ class DotChar:
 
     def __repr__(self):
         return f"DotChar({self.char or '<char space>'})"
+
+
+class DotFontRef(BaseModel):
+    name: str
+    line_height: int
+    space_width: int
+    width_between_chars: int
 
 
 class DotFont:
@@ -96,3 +104,11 @@ class DotFont:
 
     def get_chars(self, text: str) -> list[DotChar]:
         return [self.get_char(char) for char in text]
+
+    def to_ref(self) -> DotFontRef:
+        return DotFontRef(
+            name=self.face.family_name,
+            line_height=self.line_height,
+            space_width=self.space_width,
+            width_between_chars=self.width_between_chars,
+        )

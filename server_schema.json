@@ -23,6 +23,24 @@
         }
       }
     },
+    "/fonts": {
+      "get": {
+        "summary": "Get Registered Fonts",
+        "operationId": "get_registered_fonts_fonts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FontList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/modes": {
       "get": {
         "summary": "Get Registered Display Modes",
@@ -192,6 +210,50 @@
         ],
         "title": "DisplayModeRef",
         "description": "A reference to a display mode."
+      },
+      "DotFontRef": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "line_height": {
+            "type": "integer",
+            "title": "Line Height"
+          },
+          "space_width": {
+            "type": "integer",
+            "title": "Space Width"
+          },
+          "width_between_chars": {
+            "type": "integer",
+            "title": "Width Between Chars"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "line_height",
+          "space_width",
+          "width_between_chars"
+        ],
+        "title": "DotFontRef"
+      },
+      "FontList": {
+        "properties": {
+          "fonts": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DotFontRef"
+            },
+            "type": "object",
+            "title": "Fonts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fonts"
+        ],
+        "title": "FontList"
       },
       "HTTPValidationError": {
         "properties": {

@@ -3,9 +3,11 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
 
 from flipdot.display_mode import DisplayModeList, DisplayModeRef, list_display_modes
+from flipdot.font import FontList, list_fonts
 from flipdot.State import State, StateObject
 from flipdot.vend.flippydot import Panel
 
@@ -32,6 +34,10 @@ def create_app(
     @app.get('/heartbeat', response_model=Heartbeat)
     async def heartbeat():
         return Heartbeat()
+
+    @app.get('/fonts', response_model=FontList)
+    async def get_registered_fonts():
+        return list_fonts()
 
     @app.get('/modes', response_model=DisplayModeList)
     async def get_registered_display_modes():
@@ -66,5 +72,13 @@ def create_app(
     async def clear_errors():
         state.errors.clear()
         return state.to_object()
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     return app

@@ -7,7 +7,6 @@ from flipdot.display_mode.Clock import Clock
 from flipdot.display_mode.ScrollText import ScrollText
 from flipdot.display_mode.solid import Black, White
 from flipdot.display_mode.Weather import Weather
-from flipdot.display_mode.Wipe import Wipe
 
 __slots__ = [
     "BaseDisplayMode",
@@ -23,7 +22,6 @@ registry: dict[str, type[BaseDisplayMode]] = {
     "scroll_text": ScrollText,
     "clock": Clock,
     "weather": Weather,
-    "wipe": Wipe,
 }
 
 

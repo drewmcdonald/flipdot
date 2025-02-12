@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# Start the frontend development server
+cd frontend && npm run dev &
+
+# Start the backend server
+uvicorn server:server --reload --port 8080 &
+
+# Wait for both processes
+wait 
