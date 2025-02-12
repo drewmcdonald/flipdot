@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fonts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Registered Fonts */
+        get: operations["get_registered_fonts_fonts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/modes": {
         parameters: {
             query?: never;
@@ -128,6 +145,24 @@ export interface components {
             /** Opts */
             opts?: Record<string, never> | null;
         };
+        /** DotFontRef */
+        DotFontRef: {
+            /** Name */
+            name: string;
+            /** Line Height */
+            line_height: number;
+            /** Space Width */
+            space_width: number;
+            /** Width Between Chars */
+            width_between_chars: number;
+        };
+        /** FontList */
+        FontList: {
+            /** Fonts */
+            fonts: {
+                [key: string]: components["schemas"]["DotFontRef"];
+            };
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -194,6 +229,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Heartbeat"];
+                };
+            };
+        };
+    };
+    get_registered_fonts_fonts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FontList"];
                 };
             };
         };
