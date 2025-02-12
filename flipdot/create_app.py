@@ -16,6 +16,16 @@ class Heartbeat(BaseModel):
     status: Literal["ok"] = "ok"
 
 
+class Config(BaseModel):
+    class Dimensions(BaseModel):
+        width: int
+        height: int
+
+    fonts: FontList
+    modes: DisplayModeList
+    dimensions: Dimensions
+
+
 default_mode = DisplayModeRef(name="clock")
 
 
@@ -38,13 +48,16 @@ def create_app(
     async def heartbeat():
         return Heartbeat()
 
-    @app.get('/fonts', response_model=FontList)
-    async def get_registered_fonts():
-        return list_fonts()
-
-    @app.get('/modes', response_model=DisplayModeList)
-    async def get_registered_display_modes():
-        return list_display_modes()
+    @app.get('/config', response_model=Config)
+    async def get_config():
+        return {
+            "fonts": list_fonts(),
+            "modes": list_display_modes(),
+            "dimensions": {
+                "width": state.panel.total_width,
+                "height": state.panel.total_height,
+            },
+        }
 
     @app.get("/mode", response_model=DisplayModeRef)
     async def get_current_display_mode():

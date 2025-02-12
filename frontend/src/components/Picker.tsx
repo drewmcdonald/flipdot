@@ -1,18 +1,13 @@
-import { Suspense } from "react";
-import { api } from "../api";
 import type { components } from "../api/schema";
-import { Loading } from "./Loading";
+import { useConfig } from "./config/useConfig";
 
 export function Picker() {
-  const { data } = api.useSuspenseQuery("get", "/modes");
-  console.log(data.display_modes);
+  const config = useConfig();
   return (
     <div className="flex flex-col gap-4 h-1/2">
-      <Suspense fallback={<Loading />}>
-        {Object.entries(data.display_modes).map(([name, mode]) => (
-          <PickerPanel key={name} mode={mode} />
-        ))}
-      </Suspense>
+      {Object.entries(config.modes.display_modes).map(([name, mode]) => (
+        <PickerPanel key={name} mode={mode} />
+      ))}
     </div>
   );
 }

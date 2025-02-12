@@ -21,32 +21,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/fonts": {
+    "/config": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Registered Fonts */
-        get: operations["get_registered_fonts_fonts_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/modes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Registered Display Modes */
-        get: operations["get_registered_display_modes_modes_get"];
+        /** Get Config */
+        get: operations["get_config_config_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -128,6 +111,19 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Config */
+        Config: {
+            fonts: components["schemas"]["FontList"];
+            modes: components["schemas"]["DisplayModeList"];
+            dimensions: components["schemas"]["Dimensions"];
+        };
+        /** Dimensions */
+        Dimensions: {
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+        };
         /** DisplayModeList */
         DisplayModeList: {
             /** Display Modes */
@@ -233,7 +229,7 @@ export interface operations {
             };
         };
     };
-    get_registered_fonts_fonts_get: {
+    get_config_config_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -248,27 +244,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FontList"];
-                };
-            };
-        };
-    };
-    get_registered_display_modes_modes_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DisplayModeList"];
+                    "application/json": components["schemas"]["Config"];
                 };
             };
         };

@@ -4,6 +4,7 @@ import App from "./App.tsx";
 import "./index.css";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ConfigProvider } from "./components/config/ConfigProvider.tsx";
 
 const queryClient = new QueryClient();
 
@@ -13,7 +14,9 @@ if (!root) throw new Error("Root element not found");
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <ConfigProvider>
+        <App />
+      </ConfigProvider>
     </QueryClientProvider>
   </StrictMode>
 );

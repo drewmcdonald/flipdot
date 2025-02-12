@@ -23,35 +23,17 @@
         }
       }
     },
-    "/fonts": {
+    "/config": {
       "get": {
-        "summary": "Get Registered Fonts",
-        "operationId": "get_registered_fonts_fonts_get",
+        "summary": "Get Config",
+        "operationId": "get_config_config_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FontList"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/modes": {
-      "get": {
-        "summary": "Get Registered Display Modes",
-        "operationId": "get_registered_display_modes_modes_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DisplayModeList"
+                  "$ref": "#/components/schemas/Config"
                 }
               }
             }
@@ -170,6 +152,44 @@
   },
   "components": {
     "schemas": {
+      "Config": {
+        "properties": {
+          "fonts": {
+            "$ref": "#/components/schemas/FontList"
+          },
+          "modes": {
+            "$ref": "#/components/schemas/DisplayModeList"
+          },
+          "dimensions": {
+            "$ref": "#/components/schemas/Dimensions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fonts",
+          "modes",
+          "dimensions"
+        ],
+        "title": "Config"
+      },
+      "Dimensions": {
+        "properties": {
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          }
+        },
+        "type": "object",
+        "required": [
+          "width",
+          "height"
+        ],
+        "title": "Dimensions"
+      },
       "DisplayModeList": {
         "properties": {
           "display_modes": {
