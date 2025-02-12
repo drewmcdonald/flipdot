@@ -49,7 +49,10 @@ class Weather(BaseDisplayMode):
     opts: Options
 
     def get_current_weather(self) -> CurrentWeatherData:
-        url = f"{BASE_URL}lat={self.opts.lat}&lon={self.opts.lon}&appid={API_KEY}&{api_settings}&{api_units}"
+        url = (
+            f"{BASE_URL}lat={self.opts.lat}&lon={self.opts.lon}"
+            "&appid={API_KEY}&{api_settings}&{api_units}"
+        )
         response = requests.get(url)
         return CurrentWeatherData(**response.json()['current'])
 

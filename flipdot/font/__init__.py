@@ -11,39 +11,39 @@ def font_path(font_name: str) -> pathlib.Path:
     return FONTS_DIR / f"{font_name}.ttf"
 
 
-registry = dict(
-    axion_6x7=DotFont(
+registry = {
+    "axion_6x7": DotFont(
         font_path("axion-6x7-dotmap"),
         7,
         space_width=3,
         width_between_chars=1,
     ),
-    cg_pixel_4x5=DotFont(
+    "cg_pixel_4x5": DotFont(
         font_path("cg-pixel-4x5"),
         5,
         space_width=2,
         width_between_chars=1,
     ),
-    hanover_6x13m=DotFont(
+    "hanover_6x13m": DotFont(
         font_path("hanover-6x13m-dotmap"),
         13,
         space_width=3,
         width_between_chars=1,
     ),
-    twinvision_4x6=DotFont(
+    "twinvision_4x6": DotFont(
         font_path("twinvision-4x6-dotmap"),
         6,
         space_width=2,
         width_between_chars=1,
     ),
-)
+}
 
 
 def get_font(font_name: str) -> DotFont:
     try:
         return registry[font_name]
-    except KeyError:
-        raise ValueError(f"Font {font_name} not found")
+    except KeyError as e:
+        raise ValueError(f"Font {font_name} not found") from e
 
 
 def register_font(

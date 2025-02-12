@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import ClassVar, Optional
+from typing import ClassVar
 
 from pydantic import BaseModel, PrivateAttr
 
@@ -13,7 +13,7 @@ class DisplayModeRef(BaseModel):
     name: str
     """The name of the display mode."""
 
-    opts: Optional[dict] = None
+    opts: dict | None = None
     """The options of the display mode."""
 
 
@@ -53,7 +53,10 @@ class BaseDisplayMode(BaseModel):
         self._frame_idx = 0
 
     def setup(self) -> None:
-        """Setup the display mode; runs after initialization and before the first render."""
+        """
+        Setup the display mode; runs after initialization and before the first
+        render.
+        """
         pass
 
     def render(self) -> DotMatrix:

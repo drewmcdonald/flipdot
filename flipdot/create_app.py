@@ -16,9 +16,12 @@ class Heartbeat(BaseModel):
     status: Literal["ok"] = "ok"
 
 
+default_mode = DisplayModeRef(name="clock")
+
+
 def create_app(
     panel: Panel,
-    default_mode: DisplayModeRef = DisplayModeRef(name="clock"),
+    default_mode: DisplayModeRef = default_mode,
     debug: bool = False,
 ) -> FastAPI:
     state = State(panel=panel, default_mode=default_mode, debug=debug)
@@ -52,12 +55,12 @@ def create_app(
         try:
             await state.set_mode(mode)
             return state.current_mode_ref()
-        except KeyError:
-            raise HTTPException(status_code=404, detail="Display mode not found")
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail="Display mode not found") from e
         except ValidationError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+            raise HTTPException(status_code=422, detail=str(e)) from e
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     @app.get("/state", response_model=StateObject)
     async def get_state():

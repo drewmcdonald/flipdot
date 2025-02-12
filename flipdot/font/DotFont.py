@@ -1,6 +1,5 @@
 import pathlib
 from functools import lru_cache
-from typing import Union
 
 import freetype  # type: ignore
 import numpy as np
@@ -14,7 +13,7 @@ from flipdot.util import prettify_dot_matrix
 class DotChar:
     def __init__(
         self,
-        char: Union[str, None],
+        char: str | None,
         dot_matrix: DotMatrix,
     ):
         self.char = char
@@ -41,8 +40,8 @@ class DotFont:
         self,
         font_path: pathlib.Path,
         src_height: int,
-        space_width: Union[int, None] = None,
-        width_between_chars: Union[int, None] = None,
+        space_width: int | None = None,
+        width_between_chars: int | None = None,
         warm_cache: bool = True,
     ):
         self.face = freetype.Face(str(font_path))
@@ -67,7 +66,7 @@ class DotFont:
             chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
             self.get_chars(chars)
 
-    @lru_cache(maxsize=100)
+    @lru_cache(maxsize=100)  # noqa: B019
     def get_char(self, char: str) -> DotChar:
         if char == " ":
             return self.space
