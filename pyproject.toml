@@ -23,6 +23,8 @@ typing-extensions = "^4.12.2"
 isort = "^5.13.2"
 black = "^24.10.0"
 types-requests = "^2.32.0.20241016"
+mypy = "^1.15.0"
+ruff = "^0.9.6"
 
 [build-system]
 requires = ["poetry-core"]
