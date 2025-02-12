@@ -1,0 +1,63 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Setup and build frontend
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install
+        working-directory: frontend
+
+      - name: Build frontend
+        run: bun run build
+        working-directory: frontend
+
+      # Setup Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+
+      - name: Install dependencies
+        run: poetry install
+
+      # Create distribution
+      - name: Create dist directory
+        run: |
+          mkdir -p dist
+          cp -r flipdot dist/
+          cp server.py dist/
+          cp server_schema.json dist/
+          cp pyproject.toml dist/
+          cp poetry.lock dist/
+          cp -r frontend/dist dist/frontend
+
+      - name: Create archive
+        run: tar -czf release.tar.gz dist/
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "Release ${{ github.ref_name }}" \
+            --generate-notes \
+            release.tar.gz
