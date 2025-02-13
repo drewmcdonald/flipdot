@@ -51,9 +51,13 @@ class Weather(BaseDisplayMode):
     def get_current_weather(self) -> CurrentWeatherData:
         url = (
             f"{BASE_URL}lat={self.opts.lat}&lon={self.opts.lon}"
-            "&appid={API_KEY}&{api_settings}&{api_units}"
+            f"&appid={API_KEY}&{api_settings}&{api_units}"
         )
         response = requests.get(url)
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to get weather data: {response.text}")
+
         return CurrentWeatherData(**response.json()['current'])
 
     def should_render(self) -> bool:
