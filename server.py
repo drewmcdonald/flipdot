@@ -18,18 +18,16 @@ load_dotenv()
 @click.option("--baudrate", type=int, default=57600)
 @click.option("--host", type=str, default="0.0.0.0")
 @click.option("--port", type=int, default=8080)
-@click.option("--debug", is_flag=True)
-def run_sync(
-    layout: str, device: str, baudrate: int, host: str, port: int, debug: bool
-):
+@click.option("--dev", is_flag=True)
+def run_sync(layout: str, device: str, baudrate: int, host: str, port: int, dev: bool):
     """
     Synchronous wrapper for the asynchronous run command.
     """
-    asyncio.run(run_async(layout, device, baudrate, host, port, debug))
+    asyncio.run(run_async(layout, device, baudrate, host, port, dev))
 
 
 async def run_async(
-    layout: str, device: str, baudrate: int, host: str, port: int, debug: bool
+    layout: str, device: str, baudrate: int, host: str, port: int, dev: bool
 ):
     import uvicorn
 
@@ -38,9 +36,9 @@ async def run_async(
     app = create_app(
         Panel(parsed_layout),
         serial_conn=conn,
-        debug=debug,
+        dev=dev,
     )
-    config = uvicorn.Config(app, host=host, port=port, log_level="info")
+    config = uvicorn.Config(app, host=host, port=port, log_level="info", reload=dev)
     server = uvicorn.Server(config)
     await server.serve()
 

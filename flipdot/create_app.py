@@ -30,17 +30,17 @@ class Config(BaseModel):
     dimensions: Dimensions
 
 
-default_mode = DisplayModeRef(name="clock")
+default_mode = DisplayModeRef(mode_name="clock")
 
 
 def create_app(
     panel: Panel,
     serial_conn: serial.Serial | None = None,
     default_mode: DisplayModeRef = default_mode,
-    debug: bool = False,
+    dev: bool = False,
 ) -> FastAPI:
     state = State(
-        panel=panel, serial_conn=serial_conn, default_mode=default_mode, debug=debug
+        panel=panel, serial_conn=serial_conn, default_mode=default_mode, dev=dev
     )
 
     @asynccontextmanager
@@ -48,7 +48,7 @@ def create_app(
         logger.info("Starting lifespan")
         display_loop_task = asyncio.create_task(state.display_loop())
         yield
-        await state.set_mode(DisplayModeRef(name="white"))
+        await state.set_mode(DisplayModeRef(mode_name="white"))
         display_loop_task.cancel()
 
     app = FastAPI(lifespan=lifespan)
@@ -59,24 +59,24 @@ def create_app(
 
     @app.get('/config', response_model=Config)
     async def get_config():
-        return {
-            "fonts": list_fonts(),
-            "modes": list_display_modes(),
-            "dimensions": {
-                "width": state.panel.total_width,
-                "height": state.panel.total_height,
-            },
-        }
+        return Config(
+            fonts=list_fonts(),
+            modes=list_display_modes(),
+            dimensions=Config.Dimensions(
+                width=state.panel.total_width,
+                height=state.panel.total_height,
+            ),
+        )
 
     @app.get("/mode", response_model=DisplayModeRef)
     async def get_current_display_mode():
-        return state.current_mode_ref()
+        return state.mode.to_ref()
 
     @app.patch("/mode", response_model=DisplayModeRef)
     async def set_current_display_mode(mode: DisplayModeRef):
         try:
             await state.set_mode(mode)
-            return state.current_mode_ref()
+            return state.mode.to_ref()
         except KeyError as e:
             raise HTTPException(status_code=404, detail="Display mode not found") from e
         except ValidationError as e:

@@ -43,7 +43,7 @@ class DisplayModeList(BaseModel):
 def list_display_modes() -> DisplayModeList:
     return DisplayModeList(
         display_modes={
-            name: DisplayModeRef(name=name, opts=mode.Options.model_json_schema())
+            name: DisplayModeRef(mode_name=name, opts=mode.Options.model_json_schema())
             for name, mode in registry.items()
         }
     )

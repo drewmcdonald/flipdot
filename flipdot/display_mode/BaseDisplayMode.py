@@ -10,7 +10,7 @@ from flipdot.types import DotMatrix
 class DisplayModeRef(BaseModel):
     """A reference to a display mode."""
 
-    name: str
+    mode_name: str
     """The name of the display mode."""
 
     opts: dict | None = None
@@ -71,10 +71,7 @@ class BaseDisplayMode(BaseModel):
 
     def to_ref(self) -> DisplayModeRef:
         """Convert the display mode to a DisplayModeRef."""
-        return DisplayModeRef(
-            name=self.mode_name,
-            opts=self.opts.model_dump(),
-        )
+        return DisplayModeRef(mode_name=self.mode_name, opts=self.opts.model_dump())
 
 
 class StaticDisplayMode(BaseDisplayMode):

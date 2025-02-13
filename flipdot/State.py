@@ -24,16 +24,16 @@ class State:
     mode: BaseDisplayMode
     errors: set[str]
     default_mode: DisplayModeRef
-    debug: bool = False
+    dev: bool = False
 
     def __init__(
         self,
         panel: Panel,
         serial_conn: serial.Serial | None,
         default_mode: DisplayModeRef,
-        debug: bool = False,
+        dev: bool = False,
     ):
-        DefaultMode = get_display_mode(default_mode.name)
+        DefaultMode = get_display_mode(default_mode.mode_name)
         self.panel = panel
         self.serial_conn = serial_conn
         self.layout = Layout.from_panel(panel)
@@ -44,11 +44,11 @@ class State:
         self.inverted = False
         self.flag = False
         self.errors = set()
-        self.debug = debug
+        self.dev = dev
 
     def to_object(self) -> StateObject:
         return StateObject(
-            mode=self.current_mode_ref(),
+            mode=self.mode.to_ref(),
             errors=list(self.errors),
             layout=self.layout,
             inverted=self.inverted,
@@ -60,7 +60,7 @@ class State:
         self.flag = True
 
     async def set_mode(self, new_mode: DisplayModeRef):
-        ModeCls = get_display_mode(new_mode.name)
+        ModeCls = get_display_mode(new_mode.mode_name)
         opts = new_mode.opts or {}
         display_mode = ModeCls(
             layout=self.layout,
@@ -77,20 +77,14 @@ class State:
         serial_data = self.panel.set_content(frame)
         if self.serial_conn:
             self.serial_conn.write(serial_data)
-        elif self.debug:
+        elif self.dev:
             await self.draw_to_terminal()
         else:
-            logger.warning("No connection or debug mode, skipping render")
+            logger.warning("No connection or dev mode, skipping render")
 
     async def draw_to_terminal(self):
         content = self.panel.get_content()
         logger.info(prettify_dot_matrix(content))
-
-    def current_mode_ref(self) -> DisplayModeRef:
-        return DisplayModeRef(
-            name=self.mode.mode_name,
-            opts=self.mode.opts.model_dump(),
-        )
 
     async def display_loop(self):
         logger.info("Starting display loop")
