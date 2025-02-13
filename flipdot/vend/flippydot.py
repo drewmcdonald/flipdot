@@ -5,6 +5,7 @@ Adapted from https://github.com/chrishemmings/flipPyDot at 12d597a
 from typing import Any
 
 import numpy as np
+from serial import Serial
 
 from ..types import DotMatrix
 
@@ -48,11 +49,13 @@ class Panel:
     def __init__(
         self,
         layout: list[list[int]],
+        serial_conn: Serial,
         module_width: int = 28,
         module_height: int = 7,
     ):
         """
         :param layout: An array structure of the panel layout with panel id's
+        :param serial_conn: A serial connection to the flipdot controller
         :param module_width: Module width, normally 28
         :param module_height: Module height, normally 7
         """
@@ -64,6 +67,7 @@ class Panel:
         self.n_rows, self.n_cols = shape2d(layout)
         self.module_width = module_width
         self.module_height = module_height
+        self.serial_conn = serial_conn
 
         for row in layout:
             module_row: list[FlippyModule] = []
@@ -97,14 +101,14 @@ class Panel:
             for j, module_data in enumerate(modules):
                 self.modules[i][j].set_content(module_data)
 
-        # serial_data = np.array([])
+        serial_data = np.array([])
 
-        # for moduleRow in self.modules:
-        #     for module in moduleRow:
-        #         output = module.fetch_serial_command()
-        #         serial_data = np.append(serial_data, output.view('S32').squeeze())
+        for moduleRow in self.modules:
+            for module in moduleRow:
+                output = module.fetch_serial_command()
+                serial_data = np.append(serial_data, output.view('S32').squeeze())
 
-        # return serial_data
+        self.serial_conn.write(serial_data)  # type: ignore
 
 
 def _typed_split(data: DotMatrix, width: int, axis: int) -> list[DotMatrix]:

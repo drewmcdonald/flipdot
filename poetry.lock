@@ -873,6 +873,17 @@ files = [
 ]
 
 [[package]]
+name = "types-pyserial"
+version = "3.5.0.20250130"
+description = "Typing stubs for pyserial"
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "types_pyserial-3.5.0.20250130-py3-none-any.whl", hash = "sha256:cd5dccb65fe83e2741853aaf45caabeecfcd4c5d050107b5e56f586b3d0f46cd"},
+    {file = "types_pyserial-3.5.0.20250130.tar.gz", hash = "sha256:bc23c799bf27ff5105ee6b7cb973d47ba1f222ad8f0a4223c0b0a979bd671f3e"},
+]
+
+[[package]]
 name = "types-requests"
 version = "2.32.0.20241016"
 description = "Typing stubs for requests"
@@ -947,4 +958,4 @@ standard = ["colorama (>=0.4)", "httptools (>=0.6.3)", "python-dotenv (>=0.13)",
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "77e9fce5996553477e29c39298ccc9b501dd425e67b323e6e9064bac6d7c027b"
+content-hash = "37117555132b35a46c3534bb0aeaa37c654a2f77d4b9973d8ba14927d5f2b55c"
