@@ -13,7 +13,7 @@ class ScrollText(BaseDisplayMode):
 
     mode_name: ClassVar[str] = "scroll_text"
 
-    tick_interval = 0.05
+    tick_interval = 0.075
 
     class Options(BaseDisplayMode.Options):
         text: str = "Hi, Mom!"

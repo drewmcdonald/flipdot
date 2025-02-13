@@ -45,6 +45,10 @@ class State:
             flag=self.flag,
         )
 
+    def toggle_inverted(self):
+        self.inverted = not self.inverted
+        self.flag = True
+
     async def set_mode(self, new_mode: DisplayModeRef):
         ModeCls = get_display_mode(new_mode.name)
         opts = new_mode.opts or {}
@@ -58,14 +62,14 @@ class State:
 
     async def render(self):
         frame = self.mode.render()
+        if self.inverted:
+            frame = 1 - frame
         self.panel.set_content(frame)
         if self.debug:
             await self.draw_to_terminal()
 
     async def draw_to_terminal(self):
         content = self.panel.get_content()
-        if self.inverted:
-            content = 1 - content
         os.system("clear")
         print(prettify_dot_matrix(content))
 

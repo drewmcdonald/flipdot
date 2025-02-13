@@ -40,6 +40,7 @@ def create_app(
     async def lifespan(app: FastAPI):
         display_loop_task = asyncio.create_task(state.display_loop())
         yield
+        await state.set_mode(DisplayModeRef(name="white"))
         display_loop_task.cancel()
 
     app = FastAPI(lifespan=lifespan)
@@ -81,7 +82,7 @@ def create_app(
 
     @app.post("/state/invert", response_model=StateObject)
     async def invert_display_colors():
-        state.inverted = not state.inverted
+        state.toggle_inverted()
         return state.to_object()
 
     @app.delete("/state/errors", response_model=StateObject)
