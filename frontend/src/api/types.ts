@@ -1,3 +1,6 @@
 import { components } from "./schema";
 
-export type Config = components["schemas"]["Config"];
+export type SchemaType<T extends keyof components["schemas"]> =
+  components["schemas"][T];
+
+export type Config = SchemaType<"Config">;

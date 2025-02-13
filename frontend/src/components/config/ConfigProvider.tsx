@@ -1,7 +1,7 @@
 import { ReactNode, Suspense } from "react";
 import { ConfigContext } from "./ConfigContext";
 import { api } from "../../api";
-import { Loading } from "../Loading";
+import { Spinner } from "@chakra-ui/react";
 
 interface ConfigProviderProps {
   children: ReactNode;
@@ -13,7 +13,7 @@ export function ConfigProvider({ children }: ConfigProviderProps) {
   });
 
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<Spinner />}>
       <ConfigContext.Provider value={data}>{children}</ConfigContext.Provider>
     </Suspense>
   );
