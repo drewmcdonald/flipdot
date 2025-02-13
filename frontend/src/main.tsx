@@ -1,3 +1,4 @@
+import { Provider as ChakraProvider } from "@/components/ui/provider.tsx";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
@@ -13,10 +14,12 @@ if (!root) throw new Error("Root element not found");
 
 createRoot(root).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <ConfigProvider>
-        <App />
-      </ConfigProvider>
-    </QueryClientProvider>
+    <ChakraProvider>
+      <QueryClientProvider client={queryClient}>
+        <ConfigProvider>
+          <App />
+        </ConfigProvider>
+      </QueryClientProvider>
+    </ChakraProvider>
   </StrictMode>
 );
