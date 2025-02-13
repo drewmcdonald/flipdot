@@ -1,12 +1,15 @@
 import asyncio
-import os
+import logging
 
+import serial
 from pydantic import BaseModel
 
 from flipdot.display_mode import BaseDisplayMode, DisplayModeRef, get_display_mode
 from flipdot.layout import Layout
 from flipdot.util import prettify_dot_matrix
 from flipdot.vend.flippydot import Panel
+
+logger = logging.getLogger('uvicorn')
 
 
 class StateObject(BaseModel):
@@ -23,9 +26,16 @@ class State:
     default_mode: DisplayModeRef
     debug: bool = False
 
-    def __init__(self, panel: Panel, default_mode: DisplayModeRef, debug: bool = False):
+    def __init__(
+        self,
+        panel: Panel,
+        serial_conn: serial.Serial | None,
+        default_mode: DisplayModeRef,
+        debug: bool = False,
+    ):
         DefaultMode = get_display_mode(default_mode.name)
         self.panel = panel
+        self.serial_conn = serial_conn
         self.layout = Layout.from_panel(panel)
         self.mode = DefaultMode(
             layout=self.layout,
@@ -64,14 +74,17 @@ class State:
         frame = self.mode.render()
         if self.inverted:
             frame = 1 - frame
-        self.panel.set_content(frame)
-        if self.debug:
+        serial_data = self.panel.set_content(frame)
+        if self.serial_conn:
+            self.serial_conn.write(serial_data)
+        elif self.debug:
             await self.draw_to_terminal()
+        else:
+            logger.warning("No connection or debug mode, skipping render")
 
     async def draw_to_terminal(self):
         content = self.panel.get_content()
-        os.system("clear")
-        print(prettify_dot_matrix(content))
+        logger.info(prettify_dot_matrix(content))
 
     def current_mode_ref(self) -> DisplayModeRef:
         return DisplayModeRef(
@@ -80,6 +93,7 @@ class State:
         )
 
     async def display_loop(self):
+        logger.info("Starting display loop")
         while True:
             self.flag = False
             while not self.flag:
@@ -88,5 +102,6 @@ class State:
                         await self.render()
                     await asyncio.sleep(self.mode.tick_interval)
                 except Exception as e:
+                    logger.error(f"Error in display loop: {e}")
                     self.errors.add(str(e))
                     await asyncio.sleep(1)

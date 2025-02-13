@@ -34,12 +34,13 @@ async def run_async(
     import uvicorn
 
     parsed_layout = json.loads(layout)
-    conn = serial.Serial(port=device, baudrate=baudrate, timeout=1)
+    conn = serial.Serial(port=device, baudrate=baudrate, timeout=1) if device else None
     app = create_app(
-        Panel(parsed_layout, serial_conn=conn),
+        Panel(parsed_layout),
+        serial_conn=conn,
         debug=debug,
     )
-    config = uvicorn.Config(app, host=host, port=port)
+    config = uvicorn.Config(app, host=host, port=port, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()
 
@@ -50,7 +51,7 @@ def codegen(output: pathlib.Path):
     """
     Generates OpenAPI specification.
     """
-    server = create_app(Panel([[1]], serial_conn=serial.Serial()))
+    server = create_app(Panel([[1]]))
     text = json.dumps(server.openapi(), indent=2)
     output.write_text(text)
 

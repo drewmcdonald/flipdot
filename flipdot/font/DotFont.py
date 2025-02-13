@@ -1,13 +1,15 @@
+import logging
 import pathlib
 from functools import lru_cache
 
 import freetype  # type: ignore
 import numpy as np
-from fastapi.logger import logger
 from pydantic import BaseModel
 
 from flipdot.types import DotMatrix
 from flipdot.util import prettify_dot_matrix
+
+logger = logging.getLogger('uvicorn')
 
 
 class DotChar:

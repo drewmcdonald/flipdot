@@ -1,7 +1,9 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from typing import Literal
 
+import serial
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
@@ -10,6 +12,8 @@ from flipdot.display_mode import DisplayModeList, DisplayModeRef, list_display_m
 from flipdot.font import FontList, list_fonts
 from flipdot.State import State, StateObject
 from flipdot.vend.flippydot import Panel
+
+logger = logging.getLogger('uvicorn')
 
 
 class Heartbeat(BaseModel):
@@ -31,13 +35,17 @@ default_mode = DisplayModeRef(name="clock")
 
 def create_app(
     panel: Panel,
+    serial_conn: serial.Serial | None = None,
     default_mode: DisplayModeRef = default_mode,
     debug: bool = False,
 ) -> FastAPI:
-    state = State(panel=panel, default_mode=default_mode, debug=debug)
+    state = State(
+        panel=panel, serial_conn=serial_conn, default_mode=default_mode, debug=debug
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        logger.info("Starting lifespan")
         display_loop_task = asyncio.create_task(state.display_loop())
         yield
         await state.set_mode(DisplayModeRef(name="white"))
