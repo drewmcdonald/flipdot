@@ -136,8 +136,8 @@ export interface components {
          * @description A reference to a display mode.
          */
         DisplayModeRef: {
-            /** Name */
-            name: string;
+            /** Mode Name */
+            mode_name: string;
             /** Opts */
             opts?: Record<string, never> | null;
         };

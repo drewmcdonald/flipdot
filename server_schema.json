@@ -208,9 +208,9 @@
       },
       "DisplayModeRef": {
         "properties": {
-          "name": {
+          "mode_name": {
             "type": "string",
-            "title": "Name"
+            "title": "Mode Name"
           },
           "opts": {
             "anyOf": [
@@ -226,7 +226,7 @@
         },
         "type": "object",
         "required": [
-          "name"
+          "mode_name"
         ],
         "title": "DisplayModeRef",
         "description": "A reference to a display mode."
