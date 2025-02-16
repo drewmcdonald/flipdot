@@ -3,9 +3,9 @@ from typing import ClassVar
 
 from pydantic import PrivateAttr
 
-from flipdot.display_mode.BaseDisplayMode import BaseDisplayMode
+from flipdot.DotMatrix import DotMatrix
+from flipdot.mode.BaseDisplayMode import BaseDisplayMode
 from flipdot.text import string_to_dots
-from flipdot.types import DotMatrix
 
 
 class Clock(BaseDisplayMode):

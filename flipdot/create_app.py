@@ -8,8 +8,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ValidationError
 
-from flipdot.display_mode import DisplayModeList, DisplayModeRef, list_display_modes
 from flipdot.font import FontList, list_fonts
+from flipdot.mode import DisplayModeRef, list_display_modes
 from flipdot.State import State, StateObject
 from flipdot.vend.flippydot import Panel
 
@@ -26,7 +26,7 @@ class Config(BaseModel):
         height: int
 
     fonts: FontList
-    modes: DisplayModeList
+    modes: list[DisplayModeRef]
     dimensions: Dimensions
 
 

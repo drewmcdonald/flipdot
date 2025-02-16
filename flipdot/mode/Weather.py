@@ -5,9 +5,9 @@ import pendulum
 import requests
 from pydantic import AwareDatetime, BaseModel, PrivateAttr
 
-from flipdot.display_mode.BaseDisplayMode import BaseDisplayMode
+from flipdot.DotMatrix import DotMatrix
+from flipdot.mode.BaseDisplayMode import BaseDisplayMode
 from flipdot.text import string_to_dots
-from flipdot.types import DotMatrix
 
 BASE_URL = "https://api.openweathermap.org/data/3.0/onecall?"
 API_KEY = os.getenv("OPENWEATHER_API_KEY")

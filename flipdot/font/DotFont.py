@@ -6,8 +6,7 @@ import freetype  # type: ignore
 import numpy as np
 from pydantic import BaseModel
 
-from flipdot.types import DotMatrix
-from flipdot.util import prettify_dot_matrix
+from flipdot.DotMatrix import DotMatrix
 
 logger = logging.getLogger('uvicorn')
 
@@ -20,10 +19,10 @@ class DotChar:
     ):
         self.char = char
         self.dot_matrix = dot_matrix
-        self.height, self.width = np.shape(dot_matrix)
+        self.height, self.width = dot_matrix.shape
 
     def __str__(self):
-        return prettify_dot_matrix(self.dot_matrix)
+        return str(self.dot_matrix)
 
     def __repr__(self):
         return f"DotChar({self.char or '<char space>'})"
@@ -58,10 +57,11 @@ class DotFont:
 
         self.char_space = DotChar(
             None,
-            np.zeros((self.line_height, self.width_between_chars), dtype=np.uint8),
+            DotMatrix.from_shape((self.line_height, self.width_between_chars)),
         )
         self.space = DotChar(
-            " ", np.zeros((self.line_height, self.space_width), dtype=np.uint8)
+            " ",
+            DotMatrix.from_shape((self.line_height, self.space_width)),
         )
         # warm the cache of characters with basic alphanumeric characters
         if warm_cache:
@@ -86,7 +86,7 @@ class DotFont:
         )
 
         # Create a new blank canvas to fit the line height
-        dots = np.zeros((self.line_height, bitmap.width), dtype=np.uint8)
+        dots = DotMatrix.from_shape((self.line_height, bitmap.width))
 
         # Calculate vertical offset for centering
         top_offset = self.ascender - self.face.glyph.bitmap_top
@@ -97,11 +97,13 @@ class DotFont:
             raise ValueError("Glyph exceeds the allocated line height.")
 
         # Place the bitmap in the centered array
-        dots[top_offset:bottom_offset, : bitmap.width] = bitmap_array
+        dots.mat[top_offset:bottom_offset, : bitmap.width] = bitmap_array
 
-        mat: DotMatrix = (dots > 0).astype(int)  # type: ignore
-
-        return DotChar(char, mat)  # threshold at 0 since we assume dot matrix fonts
+        # threshold at 0 since we assume dot matrix fonts
+        return DotChar(
+            char,
+            DotMatrix((dots.mat > 0).astype(np.uint8)),
+        )
 
     def get_chars(self, text: str) -> list[DotChar]:
         return [self.get_char(char) for char in text]

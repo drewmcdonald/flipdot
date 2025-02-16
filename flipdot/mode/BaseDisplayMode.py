@@ -3,8 +3,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel, PrivateAttr
 
+from flipdot.DotMatrix import DotMatrix
 from flipdot.layout import Layout
-from flipdot.types import DotMatrix
 
 
 class DisplayModeRef(BaseModel):

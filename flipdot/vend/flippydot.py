@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from ..types import DotMatrix
+from flipdot.DotMatrix import NPDotArray
 
 START_BYTES_FLUSH = bytearray([0x80, 0x83])
 START_BYTES_BUFFER = bytearray([0x80, 0x84])
@@ -23,10 +23,10 @@ class FlippyModule:
         self.width = width
         self.height = height
         self.address = address
-        self.content: DotMatrix = np.zeros((self.height, self.width), dtype=np.uint8)
+        self.content: NPDotArray = np.zeros((self.height, self.width), dtype=np.uint8)
         self.content[2][1] = 0x01
 
-    def set_content(self, content: DotMatrix):
+    def set_content(self, content: NPDotArray):
         self.content = content
 
     def fetch_serial_command(self, flush=True) -> np.ndarray:
@@ -82,17 +82,17 @@ class Panel:
     def dimensions(self) -> tuple[int, int]:
         return self.total_height, self.total_width
 
-    def get_content(self) -> DotMatrix:
+    def get_content(self) -> NPDotArray:
         rows = [
             np.concatenate([module.content for module in module_row], axis=1)
             for module_row in self.modules
         ]
-        return np.concatenate(rows, axis=0)  # type: ignore
+        return np.concatenate(rows, axis=0)
 
-    def set_content(self, matrix_data: DotMatrix) -> bytearray:
+    def set_content(self, matrix_data: NPDotArray) -> bytearray:
 
-        for i, row in enumerate(_typed_split(matrix_data, self.n_rows, 0)):
-            modules = _typed_split(row, self.n_cols, 1)
+        for i, row in enumerate(np.split(matrix_data, self.n_rows, 0)):
+            modules = np.split(row, self.n_cols, 1)
 
             for j, module_data in enumerate(modules):
                 self.modules[i][j].set_content(module_data)
@@ -105,7 +105,3 @@ class Panel:
                 serial_data = np.append(serial_data, output.view('S32').squeeze())
 
         return bytearray(serial_data.tobytes())
-
-
-def _typed_split(data: DotMatrix, width: int, axis: int) -> list[DotMatrix]:
-    return np.split(data, width, axis)  # type: ignore

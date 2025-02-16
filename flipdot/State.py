@@ -4,9 +4,9 @@ import logging
 import serial
 from pydantic import BaseModel
 
-from flipdot.display_mode import BaseDisplayMode, DisplayModeRef, get_display_mode
+from flipdot.DotMatrix import DotMatrix
 from flipdot.layout import Layout
-from flipdot.util import prettify_dot_matrix
+from flipdot.mode import BaseDisplayMode, DisplayModeRef, get_display_mode
 from flipdot.vend.flippydot import Panel
 
 logger = logging.getLogger('uvicorn')
@@ -73,8 +73,8 @@ class State:
     async def render(self):
         frame = self.mode.render()
         if self.inverted:
-            frame = 1 - frame
-        serial_data = self.panel.set_content(frame)
+            frame = ~frame
+        serial_data = self.panel.set_content(frame.mat)
         if self.serial_conn:
             self.serial_conn.write(serial_data)
         elif self.dev:
@@ -83,8 +83,7 @@ class State:
             logger.warning("No connection or dev mode, skipping render")
 
     async def draw_to_terminal(self):
-        content = self.panel.get_content()
-        logger.info(prettify_dot_matrix(content))
+        logger.info(DotMatrix(self.panel.get_content()))
 
     async def display_loop(self):
         logger.info("Starting display loop")
@@ -96,6 +95,8 @@ class State:
                         await self.render()
                     await asyncio.sleep(self.mode.tick_interval)
                 except Exception as e:
-                    logger.error(f"Error in display loop: {e}")
+                    import traceback
+
+                    logger.error(f"Error in display loop: {traceback.format_exc()}")
                     self.errors.add(str(e))
                     await asyncio.sleep(1)

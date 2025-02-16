@@ -1,10 +1,10 @@
 from pydantic import BaseModel
 
-from flipdot.display_mode.BaseDisplayMode import BaseDisplayMode, DisplayModeRef
-from flipdot.display_mode.Clock import Clock
-from flipdot.display_mode.ScrollText import ScrollText
-from flipdot.display_mode.solid import Black, White
-from flipdot.display_mode.Weather import Weather
+from flipdot.mode.BaseDisplayMode import BaseDisplayMode, DisplayModeRef
+from flipdot.mode.Clock import Clock
+from flipdot.mode.ScrollText import ScrollText
+from flipdot.mode.solid import Black, White
+from flipdot.mode.Weather import Weather
 
 __slots__ = [
     "BaseDisplayMode",
@@ -40,10 +40,8 @@ class DisplayModeList(BaseModel):
     display_modes: dict[str, DisplayModeRef]
 
 
-def list_display_modes() -> DisplayModeList:
-    return DisplayModeList(
-        display_modes={
-            name: DisplayModeRef(mode_name=name, opts=mode.Options.model_json_schema())
-            for name, mode in registry.items()
-        }
-    )
+def list_display_modes() -> list[DisplayModeRef]:
+    return [
+        DisplayModeRef(mode_name=name, opts=mode.Options.model_json_schema())
+        for name, mode in registry.items()
+    ]

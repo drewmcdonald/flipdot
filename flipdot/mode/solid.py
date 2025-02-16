@@ -1,9 +1,7 @@
 from typing import ClassVar
 
-import numpy as np
-
-from flipdot.display_mode.BaseDisplayMode import StaticDisplayMode
-from flipdot.types import DotMatrix
+from flipdot.DotMatrix import DotMatrix
+from flipdot.mode.BaseDisplayMode import StaticDisplayMode
 
 
 class Black(StaticDisplayMode):
@@ -14,7 +12,7 @@ class Black(StaticDisplayMode):
     opts: StaticDisplayMode.Options = StaticDisplayMode.Options()
 
     def get_frame(self, frame_idx: int) -> DotMatrix:
-        return np.zeros((self.layout.height, self.layout.width), dtype=np.uint8)
+        return DotMatrix.from_shape((self.layout.height, self.layout.width))
 
 
 class White(StaticDisplayMode):
@@ -25,4 +23,4 @@ class White(StaticDisplayMode):
     opts: StaticDisplayMode.Options = StaticDisplayMode.Options()
 
     def get_frame(self, frame_idx: int) -> DotMatrix:
-        return np.ones((self.layout.height, self.layout.width), dtype=np.uint8)
+        return ~DotMatrix.from_shape((self.layout.height, self.layout.width))
