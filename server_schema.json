@@ -158,7 +158,11 @@
             "$ref": "#/components/schemas/FontList"
           },
           "modes": {
-            "$ref": "#/components/schemas/DisplayModeList"
+            "items": {
+              "$ref": "#/components/schemas/DisplayModeRef"
+            },
+            "type": "array",
+            "title": "Modes"
           },
           "dimensions": {
             "$ref": "#/components/schemas/Dimensions"
@@ -189,22 +193,6 @@
           "height"
         ],
         "title": "Dimensions"
-      },
-      "DisplayModeList": {
-        "properties": {
-          "display_modes": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/DisplayModeRef"
-            },
-            "type": "object",
-            "title": "Display Modes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "display_modes"
-        ],
-        "title": "DisplayModeList"
       },
       "DisplayModeRef": {
         "properties": {
