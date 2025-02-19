@@ -43,6 +43,8 @@ jobs:
       - name: Create dist directory
         run: |
           mkdir -p dist
+          cp README.md dist/
+          cp LICENSE dist/
           cp -r flipdot dist/
           cp server.py dist/
           cp server_schema.json dist/
