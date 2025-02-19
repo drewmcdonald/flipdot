@@ -1,9 +1,10 @@
 [tool.poetry]
 name = "flipdot"
-version = "0.1.0"
+version = "0.0.4"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Drew McDonald <github.com/drewmcdonald>"]
 readme = "README.md"
+license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.10"
