@@ -39,6 +39,16 @@ jobs:
       - name: Install dependencies
         run: poetry install
 
+      # Run codegen to ensure it's up to date
+      - name: Check for changes
+        run: |
+          poetry run python scripts/codegen.py
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Error: Codegen produced changes."
+            git status
+            git diff
+            exit 1
+          fi
       # Create distribution
       - name: Create dist directory
         run: |
