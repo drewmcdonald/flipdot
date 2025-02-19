@@ -2,6 +2,7 @@ from pydantic import BaseModel
 
 from flipdot.mode.BaseDisplayMode import BaseDisplayMode, DisplayModeRef
 from flipdot.mode.Clock import Clock
+from flipdot.mode.DotClock import DotClock
 from flipdot.mode.ScrollText import ScrollText
 from flipdot.mode.solid import Black, White
 from flipdot.mode.Weather import Weather
@@ -16,10 +17,11 @@ __slots__ = [
 
 registry: dict[str, type[BaseDisplayMode]] = {
     "black": Black,
+    "clock": Clock,
+    "dotclock": DotClock,
+    "weather": Weather,
     "white": White,
     "scroll_text": ScrollText,
-    "clock": Clock,
-    "weather": Weather,
 }
 
 
