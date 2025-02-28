@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, PrivateAttr
 
@@ -13,7 +13,7 @@ class DisplayModeRef(BaseModel):
     mode_name: str
     """The name of the display mode."""
 
-    opts: dict | None = None
+    opts: dict[str, Any]
     """The options of the display mode."""
 
 

@@ -201,20 +201,14 @@
             "title": "Mode Name"
           },
           "opts": {
-            "anyOf": [
-              {
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "object",
             "title": "Opts"
           }
         },
         "type": "object",
         "required": [
-          "mode_name"
+          "mode_name",
+          "opts"
         ],
         "title": "DisplayModeRef",
         "description": "A reference to a display mode."

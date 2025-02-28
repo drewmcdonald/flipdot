@@ -30,7 +30,7 @@ class Config(BaseModel):
     dimensions: Dimensions
 
 
-default_mode = DisplayModeRef(mode_name="clock")
+default_mode = DisplayModeRef(mode_name="clock", opts={})
 
 
 def create_app(
@@ -48,7 +48,7 @@ def create_app(
         logger.info("Starting lifespan")
         display_loop_task = asyncio.create_task(state.display_loop())
         yield
-        await state.set_mode(DisplayModeRef(mode_name="white"))
+        await state.set_mode(DisplayModeRef(mode_name="white", opts={}))
         display_loop_task.cancel()
 
     app = FastAPI(lifespan=lifespan)

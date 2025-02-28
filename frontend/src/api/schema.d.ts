@@ -133,7 +133,7 @@ export interface components {
             /** Mode Name */
             mode_name: string;
             /** Opts */
-            opts?: Record<string, never> | null;
+            opts: Record<string, never>;
         };
         /** DotFontRef */
         DotFontRef: {
