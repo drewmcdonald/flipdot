@@ -1,6 +1,5 @@
 import asyncio
 import json
-import pathlib
 
 import click
 import serial
@@ -19,7 +18,7 @@ load_dotenv()
 @click.option("--host", type=str, default="0.0.0.0")
 @click.option("--port", type=int, default=8080)
 @click.option("--dev", is_flag=True)
-def run_sync(layout: str, device: str, baudrate: int, host: str, port: int, dev: bool):
+def run(layout: str, device: str, baudrate: int, host: str, port: int, dev: bool):
     """
     Synchronous wrapper for the asynchronous run command.
     """
@@ -43,28 +42,5 @@ async def run_async(
     await server.serve()
 
 
-@click.command('codegen')
-@click.option('--output', type=pathlib.Path, default='openapi.json')
-def codegen(output: pathlib.Path):
-    """
-    Generates OpenAPI specification.
-    """
-    server = create_app(Panel([[1]]))
-    text = json.dumps(server.openapi(), indent=2)
-    output.write_text(text)
-
-
-@click.group()
-def cli():
-    """
-    CLI group for server commands.
-    """
-    pass
-
-
-cli.add_command(run_sync, "run")
-cli.add_command(codegen)
-
-
 if __name__ == "__main__":
-    cli()
+    run()
