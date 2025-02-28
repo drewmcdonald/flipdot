@@ -130,7 +130,7 @@ export interface components {
             /** Mode Name */
             mode_name: string;
             /** Opts */
-            opts: Record<string, never>;
+            opts: Record<string, unknown>;
         };
         /**
          * DisplayModeRef
@@ -140,7 +140,7 @@ export interface components {
             /** Mode Name */
             mode_name: string;
             /** Opts */
-            opts: Record<string, never>;
+            opts: Record<string, unknown>;
         };
         /** DotFontRef */
         DotFontRef: {

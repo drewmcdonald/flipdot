@@ -20,6 +20,7 @@ if __name__ == "__main__":
             "bunx",
             "openapi-typescript",
             "../flipdot/server_schema.json",
+            "--empty-objects-unknown",
             "-o",
             "./src/api/schema.d.ts",
         ]
