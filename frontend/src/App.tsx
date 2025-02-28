@@ -1,5 +1,5 @@
 import { Box } from "@chakra-ui/react";
-import { Display } from "./components/display/Display";
+import { Display } from "./components/Display";
 
 function App() {
   return (
