@@ -115,7 +115,7 @@ export interface components {
         Config: {
             fonts: components["schemas"]["FontList"];
             /** Modes */
-            modes: components["schemas"]["DisplayModeRef"][];
+            modes: components["schemas"]["DisplayModeConfig"][];
             dimensions: components["schemas"]["Dimensions"];
         };
         /** Dimensions */
@@ -124,6 +124,13 @@ export interface components {
             width: number;
             /** Height */
             height: number;
+        };
+        /** DisplayModeConfig */
+        DisplayModeConfig: {
+            /** Mode Name */
+            mode_name: string;
+            /** Opts */
+            opts: Record<string, never>;
         };
         /**
          * DisplayModeRef

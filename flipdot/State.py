@@ -37,10 +37,7 @@ class State:
         self.panel = panel
         self.serial_conn = serial_conn
         self.layout = Layout.from_panel(panel)
-        self.mode = DefaultMode(
-            layout=self.layout,
-            opts=DefaultMode.Options(**default_mode.opts or {}),
-        )
+        self.mode = DefaultMode(layout=self.layout)
         self.inverted = False
         self.flag = False
         self.errors = set()

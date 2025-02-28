@@ -5,6 +5,6 @@ export type SchemaType<T extends keyof components["schemas"]> =
 
 export type Config = SchemaType<"Config">;
 export type DisplayModeRef = SchemaType<"DisplayModeRef">;
-export type DisplayModeList = SchemaType<"DisplayModeRef">[];
+export type DisplayModeConfig = SchemaType<"DisplayModeConfig">;
 export type Dimensions = SchemaType<"Dimensions">;
 export type StateObject = SchemaType<"StateObject">;

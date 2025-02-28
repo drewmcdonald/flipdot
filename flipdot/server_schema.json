@@ -159,7 +159,7 @@
           },
           "modes": {
             "items": {
-              "$ref": "#/components/schemas/DisplayModeRef"
+              "$ref": "#/components/schemas/DisplayModeConfig"
             },
             "type": "array",
             "title": "Modes"
@@ -193,6 +193,24 @@
           "height"
         ],
         "title": "Dimensions"
+      },
+      "DisplayModeConfig": {
+        "properties": {
+          "mode_name": {
+            "type": "string",
+            "title": "Mode Name"
+          },
+          "opts": {
+            "type": "object",
+            "title": "Opts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode_name",
+          "opts"
+        ],
+        "title": "DisplayModeConfig"
       },
       "DisplayModeRef": {
         "properties": {

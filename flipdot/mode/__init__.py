@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel
 
 from flipdot.mode.BaseDisplayMode import BaseDisplayMode, DisplayModeRef
@@ -42,8 +44,15 @@ class DisplayModeList(BaseModel):
     display_modes: dict[str, DisplayModeRef]
 
 
-def list_display_modes() -> list[DisplayModeRef]:
+class DisplayModeConfig(BaseModel):
+    mode_name: str
+    opts: dict[str, Any]
+
+
+def list_display_modes() -> list[DisplayModeConfig]:
     return [
-        DisplayModeRef(mode_name=name, opts=mode.Options.model_json_schema())
+        DisplayModeConfig(
+            mode_name=name, opts=mode.Options.model_json_schema(mode="serialization")
+        )
         for name, mode in registry.items()
     ]

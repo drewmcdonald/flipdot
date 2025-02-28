@@ -6,7 +6,7 @@ import requests
 from pydantic import AwareDatetime, BaseModel, PrivateAttr
 
 from flipdot.DotMatrix import DotMatrix
-from flipdot.mode.BaseDisplayMode import BaseDisplayMode
+from flipdot.mode.BaseDisplayMode import BaseDisplayMode, DisplayModeOptions
 from flipdot.text import string_to_dots
 
 BASE_URL = "https://api.openweathermap.org/data/3.0/onecall?"
@@ -29,24 +29,26 @@ class CurrentWeatherData(BaseModel):
     humidity: int
 
 
+class WeatherOptions(DisplayModeOptions):
+    font: str = "cg_pixel_4x5"
+    """The font to use for the text."""
+    lat: float = 37.7749
+    """The latitude of the weather location."""
+    lon: float = -122.4194
+    """The longitude of the weather location."""
+
+
 class Weather(BaseDisplayMode):
     """A display mode that shows the current weather."""
 
     mode_name: ClassVar[str] = "weather"
+    Options: ClassVar[type[DisplayModeOptions]] = WeatherOptions
 
     tick_interval = 1
 
     _last_dt: pendulum.DateTime | None = PrivateAttr(default=None)
 
-    class Options(BaseDisplayMode.Options):
-        font: str = "cg_pixel_4x5"
-        """The font to use for the text."""
-        lat: float = 37.7749
-        """The latitude of the weather location."""
-        lon: float = -122.4194
-        """The longitude of the weather location."""
-
-    opts: Options
+    opts: WeatherOptions = WeatherOptions()
 
     def get_current_weather(self) -> CurrentWeatherData:
         url = (

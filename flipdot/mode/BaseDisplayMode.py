@@ -17,6 +17,13 @@ class DisplayModeRef(BaseModel):
     """The options of the display mode."""
 
 
+class DisplayModeOptions(BaseModel):
+    """Base options class for all display modes."""
+
+    class Config:
+        arbitrary_types_allowed = True
+
+
 class BaseDisplayMode(BaseModel):
     """Base class for all display modes."""
 
@@ -26,16 +33,13 @@ class BaseDisplayMode(BaseModel):
     mode_name: ClassVar[str]
     """The name of the display mode."""
 
+    Options: ClassVar[type[DisplayModeOptions]] = DisplayModeOptions
+    """The options class for this display mode."""
+
     layout: Layout
     """The layout of the display mode."""
 
-    class Options(BaseModel):
-        """A pydantic model for the options of the display mode."""
-
-        class Config:
-            arbitrary_types_allowed = True
-
-    opts: Options
+    opts: DisplayModeOptions = DisplayModeOptions()
     """The options of the display mode."""
 
     _frame_idx: int = PrivateAttr(0)
