@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "flipdot"
-version = "0.0.4"
+version = "0.0.5"
 description = ""
 authors = ["Drew McDonald <github.com/drewmcdonald>"]
 readme = "README.md"
