@@ -32,9 +32,9 @@ class CurrentWeatherData(BaseModel):
 class WeatherOptions(DisplayModeOptions):
     font: str = "cg_pixel_4x5"
     """The font to use for the text."""
-    lat: float = 37.7749
+    lat: float = 38.9034
     """The latitude of the weather location."""
-    lon: float = -122.4194
+    lon: float = -76.9882
     """The longitude of the weather location."""
 
 
@@ -71,5 +71,5 @@ class Weather(BaseDisplayMode):
         weather = self.get_current_weather()
         self._last_dt = pendulum.now()
 
-        data = f"{weather.temp:.1f}F"
+        data = f"{weather.temp:.1f}"
         return self.layout.center_middle(string_to_dots(data, self.opts.font))

@@ -1,15 +1,30 @@
+from datetime import datetime, timedelta, timezone
 from typing import ClassVar
 
 import numpy as np
+from pydantic import PrivateAttr
 
 from flipdot.DotMatrix import DotMatrix
-from flipdot.mode.Clock import Clock
+from flipdot.mode.BaseDisplayMode import BaseDisplayMode, DisplayModeOptions
 
 
-class DotClock(Clock):
+class DotClockOptions(DisplayModeOptions):
+    timezone_offset: int = -5
+
+
+class DotClock(BaseDisplayMode):
     """Displays the current time as dots."""
 
     mode_name: ClassVar[str] = "dotclock"
+    Options: ClassVar[type[DisplayModeOptions]] = DotClockOptions
+    opts: DotClockOptions = DotClockOptions()
+    _last_rendered_minute: int = PrivateAttr(-1)
+
+    def now(self) -> datetime:
+        return datetime.now(timezone(timedelta(hours=self.opts.timezone_offset)))
+
+    def should_render(self) -> bool:
+        return self._last_rendered_minute != self.now().minute
 
     @staticmethod
     def hour_cols(hour: int) -> DotMatrix:
