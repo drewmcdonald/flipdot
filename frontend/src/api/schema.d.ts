@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/heartbeat": {
+    "/api/heartbeat": {
         parameters: {
             query?: never;
             header?: never;
@@ -12,7 +12,7 @@ export interface paths {
             cookie?: never;
         };
         /** Heartbeat */
-        get: operations["heartbeat_heartbeat_get"];
+        get: operations["heartbeat_api_heartbeat_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21,7 +21,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/config": {
+    "/api/config": {
         parameters: {
             query?: never;
             header?: never;
@@ -29,7 +29,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get Config */
-        get: operations["get_config_config_get"];
+        get: operations["get_config_api_config_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -38,7 +38,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/mode": {
+    "/api/mode": {
         parameters: {
             query?: never;
             header?: never;
@@ -46,17 +46,17 @@ export interface paths {
             cookie?: never;
         };
         /** Get Current Display Mode */
-        get: operations["get_current_display_mode_mode_get"];
+        get: operations["get_current_display_mode_api_mode_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         /** Set Current Display Mode */
-        patch: operations["set_current_display_mode_mode_patch"];
+        patch: operations["set_current_display_mode_api_mode_patch"];
         trace?: never;
     };
-    "/state": {
+    "/api/state": {
         parameters: {
             query?: never;
             header?: never;
@@ -64,7 +64,7 @@ export interface paths {
             cookie?: never;
         };
         /** Get State */
-        get: operations["get_state_state_get"];
+        get: operations["get_state_api_state_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -73,7 +73,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/state/invert": {
+    "/api/state/invert": {
         parameters: {
             query?: never;
             header?: never;
@@ -83,14 +83,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** Invert Display Colors */
-        post: operations["invert_display_colors_state_invert_post"];
+        post: operations["invert_display_colors_api_state_invert_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/state/errors": {
+    "/api/state/errors": {
         parameters: {
             query?: never;
             header?: never;
@@ -101,7 +101,24 @@ export interface paths {
         put?: never;
         post?: never;
         /** Clear Errors */
-        delete: operations["clear_errors_state_errors_delete"];
+        delete: operations["clear_errors_api_state_errors_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{full_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Serve Frontend */
+        get: operations["serve_frontend__full_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -210,7 +227,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    heartbeat_heartbeat_get: {
+    heartbeat_api_heartbeat_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -230,7 +247,7 @@ export interface operations {
             };
         };
     };
-    get_config_config_get: {
+    get_config_api_config_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -250,7 +267,7 @@ export interface operations {
             };
         };
     };
-    get_current_display_mode_mode_get: {
+    get_current_display_mode_api_mode_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -270,7 +287,7 @@ export interface operations {
             };
         };
     };
-    set_current_display_mode_mode_patch: {
+    set_current_display_mode_api_mode_patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -303,7 +320,7 @@ export interface operations {
             };
         };
     };
-    get_state_state_get: {
+    get_state_api_state_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -323,7 +340,7 @@ export interface operations {
             };
         };
     };
-    invert_display_colors_state_invert_post: {
+    invert_display_colors_api_state_invert_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -343,7 +360,7 @@ export interface operations {
             };
         };
     };
-    clear_errors_state_errors_delete: {
+    clear_errors_api_state_errors_delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -359,6 +376,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StateObject"];
+                };
+            };
+        };
+    };
+    serve_frontend__full_path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                full_path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

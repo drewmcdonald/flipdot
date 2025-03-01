@@ -8,7 +8,7 @@ interface ConfigProviderProps {
 }
 
 export function ConfigProvider({ children }: ConfigProviderProps) {
-  const res = api.useQuery("get", "/config", {
+  const res = api.useQuery("get", "/api/config", {
     cache: "force-cache",
   });
 

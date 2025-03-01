@@ -1,11 +1,13 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Literal
 
 import serial
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from flipdot.font import FontList, list_fonts
@@ -53,11 +55,11 @@ def create_app(
 
     app = FastAPI(lifespan=lifespan)
 
-    @app.get('/heartbeat', response_model=Heartbeat)
+    @app.get('/api/heartbeat', response_model=Heartbeat)
     async def heartbeat():
         return Heartbeat()
 
-    @app.get('/config', response_model=Config)
+    @app.get('/api/config', response_model=Config)
     async def get_config():
         return Config(
             fonts=list_fonts(),
@@ -68,11 +70,11 @@ def create_app(
             ),
         )
 
-    @app.get("/mode", response_model=DisplayModeRef)
+    @app.get("/api/mode", response_model=DisplayModeRef)
     async def get_current_display_mode():
         return state.mode.to_ref()
 
-    @app.patch("/mode", response_model=DisplayModeRef)
+    @app.patch("/api/mode", response_model=DisplayModeRef)
     async def set_current_display_mode(mode: DisplayModeRef):
         try:
             await state.set_mode(mode)
@@ -84,26 +86,34 @@ def create_app(
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
-    @app.get("/state", response_model=StateObject)
+    @app.get("/api/state", response_model=StateObject)
     async def get_state():
         return state.to_object()
 
-    @app.post("/state/invert", response_model=StateObject)
+    @app.post("/api/state/invert", response_model=StateObject)
     async def invert_display_colors():
         state.toggle_inverted()
         return state.to_object()
 
-    @app.delete("/state/errors", response_model=StateObject)
+    @app.delete("/api/state/errors", response_model=StateObject)
     async def clear_errors():
         state.errors.clear()
         return state.to_object()
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    static_dir = os.path.join(os.path.dirname(__file__), "dist")
+    if os.path.exists(static_dir):
+        logger.info(f"Mounting static files from {static_dir}")
+        app.mount(
+            "/assets",
+            StaticFiles(directory=os.path.join(static_dir, "assets")),
+            name="assets",
+        )
+
+        @app.get("/{full_path:path}")
+        async def serve_frontend(full_path: str):
+            index_path = os.path.join(static_dir, "index.html")
+            if os.path.exists(index_path):
+                return FileResponse(index_path)
+            raise HTTPException(status_code=404, detail="File not found")
 
     return app

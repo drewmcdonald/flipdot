@@ -19,7 +19,7 @@ interface JsonSchema {
 }
 
 export function DisplayModeForm() {
-  const { mutate: mutateMode } = api.useMutation("patch", "/mode");
+  const { mutate: mutateMode } = api.useMutation("patch", "/api/mode");
   const { modes, fonts } = useConfig();
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, unknown>>({});

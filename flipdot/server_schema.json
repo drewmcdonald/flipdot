@@ -5,10 +5,10 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/heartbeat": {
+    "/api/heartbeat": {
       "get": {
         "summary": "Heartbeat",
-        "operationId": "heartbeat_heartbeat_get",
+        "operationId": "heartbeat_api_heartbeat_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -23,10 +23,10 @@
         }
       }
     },
-    "/config": {
+    "/api/config": {
       "get": {
         "summary": "Get Config",
-        "operationId": "get_config_config_get",
+        "operationId": "get_config_api_config_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -41,10 +41,10 @@
         }
       }
     },
-    "/mode": {
+    "/api/mode": {
       "get": {
         "summary": "Get Current Display Mode",
-        "operationId": "get_current_display_mode_mode_get",
+        "operationId": "get_current_display_mode_api_mode_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -60,7 +60,7 @@
       },
       "patch": {
         "summary": "Set Current Display Mode",
-        "operationId": "set_current_display_mode_mode_patch",
+        "operationId": "set_current_display_mode_api_mode_patch",
         "requestBody": {
           "content": {
             "application/json": {
@@ -95,10 +95,10 @@
         }
       }
     },
-    "/state": {
+    "/api/state": {
       "get": {
         "summary": "Get State",
-        "operationId": "get_state_state_get",
+        "operationId": "get_state_api_state_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -113,10 +113,10 @@
         }
       }
     },
-    "/state/invert": {
+    "/api/state/invert": {
       "post": {
         "summary": "Invert Display Colors",
-        "operationId": "invert_display_colors_state_invert_post",
+        "operationId": "invert_display_colors_api_state_invert_post",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -131,10 +131,10 @@
         }
       }
     },
-    "/state/errors": {
+    "/api/state/errors": {
       "delete": {
         "summary": "Clear Errors",
-        "operationId": "clear_errors_state_errors_delete",
+        "operationId": "clear_errors_api_state_errors_delete",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -142,6 +142,43 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StateObject"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/{full_path}": {
+      "get": {
+        "summary": "Serve Frontend",
+        "operationId": "serve_frontend__full_path__get",
+        "parameters": [
+          {
+            "name": "full_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Full Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
