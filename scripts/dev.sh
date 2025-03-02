@@ -33,9 +33,6 @@ watchfiles "poetry run python server.py --dev --host 127.0.0.1" . \
   --ignore-paths "*.log.*" &
 API_PID=$!
 
-# Wait a moment for the API to start
-sleep 2
-
 # Start frontend development server with hot reload
 echo -e "${GREEN}Starting Bun/React frontend with hot reload...${NC}"
 cd frontend && bun run dev --host &
