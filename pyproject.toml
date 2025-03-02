@@ -28,6 +28,7 @@ types-requests = "^2.32.0.20241016"
 mypy = "^1.15.0"
 ruff = "^0.9.6"
 types-pyserial = "^3.5.0.20250130"
+watchfiles = "^1.0.4"
 
 [build-system]
 requires = ["poetry-core"]

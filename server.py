@@ -17,7 +17,7 @@ load_dotenv()
 @click.option("--baudrate", type=int, default=57600)
 @click.option("--host", type=str, default="0.0.0.0")
 @click.option("--port", type=int, default=8080)
-@click.option("--dev", is_flag=True)
+@click.option("--dev", is_flag=True, help="Print to console instead of a serial device")
 def run(layout: str, device: str, baudrate: int, host: str, port: int, dev: bool):
     """
     Synchronous wrapper for the asynchronous run command.
