@@ -23,7 +23,7 @@ trap cleanup SIGINT SIGTERM EXIT
 # Start the Python API server with watchfiles for hot reloading
 echo -e "${GREEN}Starting Python API server with live reload...${NC}"
 echo -e "${YELLOW}Watching for changes in Python files...${NC}"
-watchfiles "poetry run python server.py --dev --host 127.0.0.1" . \
+watchfiles "poetry run python flipdot/cli/server.py --dev --host 127.0.0.1" . \
   --filter python \
   --ignore-paths "__pycache__" \
   --ignore-paths ".mypy_cache" \

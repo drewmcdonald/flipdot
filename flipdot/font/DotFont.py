@@ -1,5 +1,5 @@
-import logging
 import pathlib
+import structlog # Import structlog
 from functools import lru_cache
 
 import freetype  # type: ignore
@@ -7,8 +7,10 @@ import numpy as np
 from pydantic import BaseModel
 
 from flipdot.DotMatrix import DotMatrix
+from flipdot.font.exceptions import FontLoadingError, InvalidFontFileError
 
-logger = logging.getLogger('uvicorn')
+# Use structlog for this module
+logger = structlog.get_logger(__name__)
 
 
 class DotChar:
@@ -45,7 +47,19 @@ class DotFont:
         width_between_chars: int | None = None,
         warm_cache: bool = True,
     ):
-        self.face = freetype.Face(str(font_path))
+        try:
+            self.face = freetype.Face(str(font_path))
+        except freetype.FT_Exception as e:
+            # Check if the error is due to file not found vs. invalid file format
+            if not font_path.exists():
+                # This case should ideally be caught before calling DotFont constructor,
+                # e.g., in the get_font function by checking font_path.exists().
+                # However, if called directly, this provides a fallback.
+                raise FontLoadingError(f"Font file not found at path: {font_path}") from e
+            else:
+                # File exists but freetype cannot handle it
+                raise InvalidFontFileError(f"Failed to load or parse font file {font_path}: {e}") from e
+        
         self.face.set_char_size(src_height * 64)
 
         # Get font metrics directly from face.size
@@ -75,7 +89,12 @@ class DotFont:
 
         # Check if the font supports the requested character
         if self.face.get_char_index(ord(char)) == 0:
-            logger.warning(f"The font does not support input character '{char}'")
+            logger.warning(
+                "Font does not support character, substituting with '?'", 
+                character=char,
+                font_family=self.face.family_name.decode('utf-8') if self.face.family_name else "Unknown",
+                font_style=self.face.style_name.decode('utf-8') if self.face.style_name else "Unknown"
+            )
             char = "?"
 
         self.face.load_char(char, freetype.FT_LOAD_RENDER)  # type: ignore
@@ -94,7 +113,11 @@ class DotFont:
 
         # Ensure the glyph fits within the canvas
         if top_offset < 0 or bottom_offset > self.line_height:
-            raise ValueError("Glyph exceeds the allocated line height.")
+            # This is an internal logic error or unexpected font metric,
+            # rather than a font loading issue.
+            raise ValueError(f"Glyph '{char}' (bitmap_top: {self.face.glyph.bitmap_top}, rows: {bitmap.rows}) "
+                             f"exceeds allocated line_height ({self.line_height}) with ascender ({self.ascender}). "
+                             f"Calculated top_offset: {top_offset}, bottom_offset: {bottom_offset}.")
 
         # Place the bitmap in the centered array
         dots.mat[top_offset:bottom_offset, : bitmap.width] = bitmap_array

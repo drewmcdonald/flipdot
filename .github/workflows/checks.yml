@@ -19,6 +19,8 @@ jobs:
         uses: snok/install-poetry@v1
       - name: Install dependencies
         run: poetry install
+      - name: Run tests # New step
+        run: poetry run pytest tests/
       - name: Run mypy
         run: poetry run mypy flipdot server.py
       - name: Run ruff

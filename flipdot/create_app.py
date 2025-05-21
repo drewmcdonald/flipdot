@@ -1,6 +1,6 @@
 import asyncio
-import logging
 import os
+import structlog # Import structlog
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -15,7 +15,8 @@ from flipdot.mode import DisplayModeConfig, DisplayModeRef, list_display_modes
 from flipdot.State import State, StateObject
 from flipdot.vend.flippydot import Panel
 
-logger = logging.getLogger('uvicorn')
+# Use structlog for this module
+logger = structlog.get_logger(__name__)
 
 
 class Heartbeat(BaseModel):
@@ -47,11 +48,25 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        logger.info("Starting lifespan")
+        logger.info("Lifespan: Starting up...")
         display_loop_task = asyncio.create_task(state.display_loop())
         yield
-        await state.set_mode(DisplayModeRef(mode_name="white", opts={}))
-        display_loop_task.cancel()
+        # Cleanup phase
+        logger.info("Lifespan: Shutting down. Setting mode to 'white' and cancelling display loop.")
+        try:
+            await state.set_mode(DisplayModeRef(mode_name="white", opts={}))
+        except Exception as e:
+            # Use exc_info=True for structlog to capture the exception details
+            logger.error("Lifespan: Error setting mode to 'white' during shutdown.", exc_info=True, error_message=str(e))
+        
+        if display_loop_task:
+            display_loop_task.cancel()
+            try:
+                await display_loop_task
+            except asyncio.CancelledError:
+                logger.info("Lifespan: Display loop task cancelled successfully.")
+            except Exception as e:
+                logger.error("Lifespan: Error during display loop task cancellation.", exc_info=True, error_message=str(e))
 
     app = FastAPI(lifespan=lifespan)
 
@@ -84,7 +99,15 @@ def create_app(
         except ValidationError as e:
             raise HTTPException(status_code=422, detail=str(e)) from e
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e)) from e
+            # Log the full traceback for unexpected errors using exc_info=True
+            logger.error(
+                "API: Unexpected error in set_current_display_mode.", 
+                mode_name=mode.mode_name, 
+                mode_opts=mode.opts,
+                exc_info=True, 
+                error_message=str(e)
+            )
+            raise HTTPException(status_code=500, detail="An unexpected error occurred on the server.") from e
 
     @app.get("/api/state", response_model=StateObject)
     async def get_state():
@@ -102,7 +125,7 @@ def create_app(
 
     static_dir = os.path.join(os.path.dirname(__file__), "dist")
     if os.path.exists(static_dir):
-        logger.info(f"Mounting static files from {static_dir}")
+        logger.info("Static files: Mounting.", directory=static_dir)
         app.mount(
             "/assets",
             StaticFiles(directory=os.path.join(static_dir, "assets")),

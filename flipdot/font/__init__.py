@@ -3,6 +3,7 @@ import pathlib
 from pydantic import BaseModel
 
 from flipdot.font.DotFont import DotFont, DotFontRef
+from flipdot.font.exceptions import FontLoadingError, InvalidFontFileError
 
 FONTS_DIR = pathlib.Path(__file__).parent / "fonts"
 
@@ -55,12 +56,27 @@ def register_font(
 ):
     if font_name in registry:
         raise ValueError(f"Font {font_name} already registered")
-    registry[font_name] = DotFont(
-        font_path,
-        src_height,
-        space_width,
-        width_between_chars,
-    )
+    try:
+        new_font = DotFont(
+            font_path,
+            src_height,
+            space_width,
+            width_between_chars,
+        )
+        registry[font_name] = new_font
+    except (FontLoadingError, InvalidFontFileError) as e:
+        # Re-raise as a ValueError or a more specific registration error
+        # to indicate the issue happened during registration.
+        # For now, re-raising the original error is also informative.
+        raise e 
+    except Exception as e:
+        # Catch any other unexpected errors during font instantiation
+        # It might be better to let these propagate if they are truly unexpected
+        # or define a more generic FontRegistrationError.
+        # For now, let's make it more specific to font issues if possible.
+        # If FT_Exception was not caught by DotFont, it could be caught here.
+        # However, DotFont is now expected to handle FT_Exception.
+        raise FontLoadingError(f"An unexpected error occurred while registering font {font_name}: {e}") from e
 
 
 class FontList(BaseModel):

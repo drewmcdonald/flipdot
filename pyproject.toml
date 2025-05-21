@@ -18,6 +18,7 @@ python-dotenv = "^1.0.1"
 requests = "^2.32.3"
 pendulum = "^3.0.0"
 aiofiles = "^23.2.1"
+structlog = "^25.3.0"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -29,10 +30,16 @@ mypy = "^1.15.0"
 ruff = "^0.9.6"
 types-pyserial = "^3.5.0.20250130"
 watchfiles = "^1.0.4"
+pytest = "^8.3.5"
+numpy = "^2.2.6"
+pytest-asyncio = "^0.26.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+flipdot-server = "flipdot.cli.server:run"
 
 [tool.isort]
 profile = "black"
