@@ -104,10 +104,19 @@ class TestStringToDots:
         # The " " char from font.get_chars(" ") is added directly.
         # A (1x3) + space_char (1x3) + B (2x3) + trailing_space (1x3)
         # Total width = 1 + 1 + 2 + 1 = 5
+        # A: [[1],[1],[1]]
+        # Space char (mocked as 1 wide '0'): [[0],[0],[0]]
+        # B: [[1,1],[1,1],[1,1]]
+        # Trailing space (1 wide '0'): [[0],[0],[0]]
+        # Concatenated:
+        # A S B T
+        # [1,0,1,1,0]
+        # [1,0,1,1,0]
+        # [1,0,1,1,0]
         expected_matrix = mat([
-            [1, 0, 0, 1, 1, 0], # A, space_char_matrix, B, trailing_space
-            [1, 0, 0, 1, 1, 0],
-            [1, 0, 0, 1, 1, 0]
+            [1, 0, 1, 1, 0],
+            [1, 0, 1, 1, 0],
+            [1, 0, 1, 1, 0]
         ])
         # A (1) + space_char (1) + B (2) + trailing_space (1) = 5
         assert result.width == mock_font_instance.char_data['A'].width + \

@@ -6,11 +6,13 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
 # Assume flipdot.create_app.create_app is the function that creates the FastAPI app
-from flipdot.create_app import create_app 
+from flipdot.create_app import create_app, Config as AppConfig # Import Config for type hinting
 from flipdot.State import State, StateObject
 from flipdot.layout import Layout
-from flipdot.mode import DisplayModeRef, BaseDisplayMode, get_display_mode_names, get_font_names
-from flipdot.mode.clock import ClockModeOptions # An example of mode options
+# Removed get_display_mode_names, get_font_names from this import
+from flipdot.mode import DisplayModeRef, BaseDisplayMode, DisplayModeConfig 
+from flipdot.font import FontList, DotFontRef # Import for mock return types
+from flipdot.mode.Clock import ClockOptions # Corrected from previous fix
 
 # --- Mocks and Test Setup ---
 
@@ -48,6 +50,7 @@ class MockTestMode(BaseDisplayMode):
 @pytest.fixture(scope="module")
 def client():
     # Patch external dependencies for the app creation context
+    # Note: Patches for list_fonts and list_display_modes are applied directly in the test_get_config test method
     with patch('flipdot.create_app.Panel', return_value=mock_panel) as mock_panel_cls, \
          patch('flipdot.create_app.serial.Serial', return_value=mock_serial_conn) as mock_serial_cls, \
          patch('flipdot.create_app.State', return_value=mock_state_instance) as mock_state_cls, \
@@ -55,13 +58,13 @@ def client():
 
         # The actual app creation
         # Default mode for testing
-        default_mode_ref = DisplayModeRef(mode_name="Clock", opts=ClockModeOptions(font="telematrix", format="%H:%M"))
+        default_mode_ref = DisplayModeRef(mode_name="Clock", opts=ClockOptions(font="telematrix", format="%H:%M").model_dump())
         
         app = create_app(
             panel=mock_panel, 
             serial_conn=mock_serial_conn, 
             default_mode=default_mode_ref,
-            dev_mode=True
+            dev=True # Corrected dev_mode to dev
         )
         # The TestClient wraps the app
         with TestClient(app) as c:
@@ -81,8 +84,8 @@ def reset_mock_state():
     mock_state_instance.dev = True
     
     # Default mode reference for the mock_state_instance
-    default_mode_opts = ClockModeOptions(font="telematrix", format="%H:%M")
-    default_display_mode_ref = DisplayModeRef(mode_name="Clock", opts=default_mode_opts.model_dump())
+    default_mode_opts_obj = ClockOptions(font="telematrix", format="%H:%M")
+    default_display_mode_ref = DisplayModeRef(mode_name="Clock", opts=default_mode_opts_obj.model_dump())
     
     # Mock the to_ref method for the default mode on the state's mode object
     # This requires state.mode to also be a mock that has a to_ref method.
@@ -112,21 +115,35 @@ def test_heartbeat(client: TestClient):
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
+# Corrected patches for test_get_config
+@patch('flipdot.create_app.list_fonts')
+@patch('flipdot.create_app.list_display_modes')
+def test_get_config(mock_list_display_modes_func, mock_list_fonts_func, client: TestClient):
+    # Setup mock return values
+    mock_fonts_data = {
+        "font1": DotFontRef(name="font1", line_height=7, space_width=3, width_between_chars=1),
+        "font2": DotFontRef(name="font2", line_height=5, space_width=2, width_between_chars=1)
+    }
+    mock_list_fonts_func.return_value = FontList(fonts=mock_fonts_data)
+    
+    mock_modes_data = [
+        DisplayModeConfig(mode_name="ModeA", opts={"type": "object", "properties": {"opt1": {"type": "string"}}}),
+        DisplayModeConfig(mode_name="ModeB", opts={"type": "object", "properties": {"opt2": {"type": "integer"}}})
+    ]
+    mock_list_display_modes_func.return_value = mock_modes_data
 
-@patch('flipdot.create_app.get_font_names', return_value=["font1", "font2"])
-@patch('flipdot.create_app.get_display_mode_names', return_value=["ModeA", "ModeB"])
-def test_get_config(mock_list_modes, mock_list_fonts, client: TestClient):
     response = client.get("/api/config")
     assert response.status_code == 200
     data = response.json()
     
-    assert data["fonts"] == ["font1", "font2"]
-    assert data["modes"] == ["ModeA", "ModeB"]
-    assert data["layout"]["width"] == mock_panel.total_width
-    assert data["layout"]["height"] == mock_panel.total_height
+    # Validate against the structure of AppConfig and the mocked data
+    assert data["fonts"]["fonts"] == {k: v.model_dump() for k, v in mock_fonts_data.items()}
+    assert data["modes"] == [m.model_dump() for m in mock_modes_data]
+    assert data["dimensions"]["width"] == mock_panel.total_width
+    assert data["dimensions"]["height"] == mock_panel.total_height
     
-    mock_list_fonts.assert_called_once()
-    mock_list_modes.assert_called_once()
+    mock_list_fonts_func.assert_called_once()
+    mock_list_display_modes_func.assert_called_once()
 
 
 def test_get_current_mode(client: TestClient):
@@ -177,9 +194,9 @@ def test_set_non_existent_mode(mock_get_mode_cls, client: TestClient):
 
 @patch('flipdot.create_app.get_display_mode') # Return a mode that has options
 def test_set_mode_with_invalid_options(mock_get_mode_cls, client: TestClient):
-    # Use ClockMode as an example, assuming ClockModeOptions requires 'font' and 'format'
+    # Use ClockMode as an example, assuming ClockOptions requires 'font' and 'format'
     # We'll make get_display_mode return the actual Clock class for option validation
-    from flipdot.mode.clock import Clock # Import the actual class
+    from flipdot.mode.Clock import Clock # Import the actual class
     mock_get_mode_cls.return_value = Clock
 
     # Missing 'format' option
@@ -206,12 +223,13 @@ async def test_display_loop_task_creation():
      # The client fixture already patches create_task.
      # We need to access the mock from there, or re-patch here.
     with patch('flipdot.create_app.asyncio.create_task') as mock_create_task_in_test:
-        default_mode_ref = DisplayModeRef(mode_name="Clock", opts=ClockModeOptions(font="telematrix", format="%H:%M"))
+        default_mode_opts_obj = ClockOptions(font="telematrix", format="%H:%M")
+        default_mode_ref = DisplayModeRef(mode_name="Clock", opts=default_mode_opts_obj.model_dump())
         app = create_app(
             panel=mock_panel, 
             serial_conn=mock_serial_conn, 
             default_mode=default_mode_ref,
-            dev_mode=True
+            dev=True # Corrected dev_mode to dev
         )
         # Check that asyncio.create_task was called with state.display_loop
         # This assumes state_instance is accessible or the one created inside create_app
