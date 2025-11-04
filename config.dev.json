@@ -1,0 +1,20 @@
+{
+  "poll_endpoint": "http://localhost:8000/api/flipdot/content",
+  "poll_interval_ms": 5000,
+  "enable_push": true,
+  "push_port": 8080,
+  "push_host": "0.0.0.0",
+  "auth": {
+    "type": "api_key",
+    "key": "dev-key-12345",
+    "header_name": "X-API-Key"
+  },
+  "serial_device": null,
+  "serial_baudrate": 57600,
+  "module_layout": [[1], [2]],
+  "module_width": 28,
+  "module_height": 7,
+  "error_fallback": "keep_last",
+  "dev_mode": true,
+  "log_level": "DEBUG"
+}
