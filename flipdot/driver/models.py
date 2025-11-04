@@ -37,7 +37,7 @@ class Frame(BaseModel):
     def validate_base64(cls, v: str) -> str:
         """Validate that data_b64 is valid base64."""
         try:
-            base64.b64decode(v)
+            base64.b64decode(v, validate=True)
         except Exception as e:
             raise ValueError(f"Invalid base64 data: {e}")
         return v

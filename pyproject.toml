@@ -29,6 +29,7 @@ mypy = "^1.15.0"
 ruff = "^0.9.6"
 types-pyserial = "^3.5.0.20250130"
 watchfiles = "^1.0.4"
+pytest = "^8.4.2"
 
 [build-system]
 requires = ["poetry-core"]

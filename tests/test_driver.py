@@ -932,13 +932,19 @@ class TestContentQueue:
         queue = ContentQueue()
 
         frame = create_test_frame(duration_ms=10)
-        content = Content(content_id="test", frames=[frame, frame])
+        content = Content(
+            content_id="test",
+            frames=[frame, frame, frame],  # 3 frames so it doesn't complete
+            playback=PlaybackMode(loop=True),  # Loop to prevent completion
+        )
         queue.add_content(content)
 
         initial_idx = queue.current.frame_index
         time.sleep(0.02)
         queue.update()
 
+        # Should still have content (looping) and advanced frame
+        assert queue.current is not None
         assert queue.current.frame_index > initial_idx
 
     def test_queue_replace_by_id(self):
@@ -1290,7 +1296,7 @@ class TestIntegration:
         packed = pack_bits_little_endian(bits)
         b64 = base64.b64encode(packed).decode()
 
-        frame = Frame(data_b64=b64, width=width, height=height, duration_ms=1000)
+        frame = Frame(data_b64=b64, width=width, height=height, duration_ms=None)  # No duration
 
         # Create content
         content = Content(
@@ -1303,8 +1309,11 @@ class TestIntegration:
         queue = ContentQueue()
         queue.add_content(content)
 
-        # Get frame from queue
-        current_frame = queue.update()
+        # Get frame from queue (should be available immediately)
+        # For StaticDisplayMode-like content (single frame, no loop),
+        # we get the current frame before update marks it complete
+        assert queue.current is not None
+        current_frame = queue.current.current_frame
         assert current_frame is not None
 
         # Convert to serial data

@@ -9,6 +9,11 @@ Adapted from https://github.com/chrishemmings/flipPyDot
 
 from typing import Optional
 
+try:
+    import serial
+except ImportError:
+    serial = None  # type: ignore
+
 # Serial protocol constants
 START_BYTES_FLUSH = bytes([0x80, 0x83])
 START_BYTES_BUFFER = bytes([0x80, 0x84])
@@ -293,8 +298,8 @@ class SerialConnection:
         self._serial = None
 
         if not dev_mode and device:
-            import serial
-
+            if serial is None:
+                raise ImportError("pyserial is required for serial communication")
             self._serial = serial.Serial(device, baudrate, timeout=1)
 
     def write(self, data: bytes) -> None:
