@@ -41,3 +41,5 @@ Thumbs.db
 # Project specific
 *.log
 graveyard/
+.mypy_cache/
+.pytest_cache/
