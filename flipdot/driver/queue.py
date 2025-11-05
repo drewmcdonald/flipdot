@@ -122,7 +122,14 @@ class ContentQueue:
 
     Thread-safe for concurrent access from push server and main thread.
     All public methods are protected by a reentrant lock to prevent race conditions.
+    Enforces memory bounds to prevent OOM from malicious/buggy servers.
     """
+
+    # Maximum number of items to queue (prevents OOM attacks)
+    MAX_QUEUED_ITEMS = 50
+
+    # Maximum number of interrupted items to keep on stack
+    MAX_INTERRUPTED_ITEMS = 10
 
     def __init__(self):
         self.current: ContentState | None = None
@@ -164,6 +171,14 @@ class ContentQueue:
                     )
                     self.current.pause()
                     self.interrupted.append(self.current)
+
+                    # Enforce memory bound on interrupted stack
+                    if len(self.interrupted) > self.MAX_INTERRUPTED_ITEMS:
+                        dropped = self.interrupted.pop(0)
+                        logger.warning(
+                            f"Interrupted stack overflow: dropped {dropped.content.content_id}"
+                        )
+
                     self.current = new_state
                 else:
                     logger.warning(
@@ -176,7 +191,11 @@ class ContentQueue:
                 self._add_to_queue(new_state)
 
     def _add_to_queue(self, state: ContentState) -> None:
-        """Add a state to the queue in priority order (highest first)."""
+        """
+        Add a state to the queue in priority order (highest first).
+
+        If queue is full, drops the lowest-priority item.
+        """
         priority = state.content.playback.priority
 
         # Find insertion point
@@ -188,8 +207,18 @@ class ContentQueue:
                 break
 
         self.queue.insert(insert_idx, state)
+
+        # Enforce memory bound: drop lowest-priority item if queue is too full
+        if len(self.queue) > self.MAX_QUEUED_ITEMS:
+            dropped = self.queue.pop()
+            logger.warning(
+                f"Queue overflow: dropped {dropped.content.content_id} "
+                f"(priority {dropped.content.playback.priority})"
+            )
+
         logger.info(
-            f"Added {state.content.content_id} to queue at position {insert_idx}"
+            f"Added {state.content.content_id} to queue at position {insert_idx} "
+            f"({len(self.queue)} items)"
         )
 
     def update(self) -> Frame | None:
