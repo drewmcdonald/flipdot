@@ -70,6 +70,10 @@ class ContentClient:
         Returns:
             ContentResponse if successful, None if error occurred
         """
+        # Record poll attempt time at the start, before any network call
+        # This ensures backoff is applied even if the poll fails
+        self.last_poll_time = time.time()
+
         try:
             headers = self._build_headers()
             request = Request(self.endpoint, headers=headers)
@@ -85,7 +89,6 @@ class ContentClient:
 
                 # Update poll interval if server specified
                 self.poll_interval_ms = content_response.poll_interval_ms
-                self.last_poll_time = time.time()
                 self.consecutive_errors = 0
 
                 # Only log at INFO for UPDATED status, use DEBUG for NO_CHANGE
