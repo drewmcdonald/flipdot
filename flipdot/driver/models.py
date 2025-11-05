@@ -7,7 +7,7 @@ Frames contain base64-encoded packed bit data for efficiency.
 
 import base64
 from enum import Enum
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -22,13 +22,13 @@ class Frame(BaseModel):
     )
     width: int = Field(..., gt=0, description="Width of the frame in pixels")
     height: int = Field(..., gt=0, description="Height of the frame in pixels")
-    duration_ms: Optional[int] = Field(
+    duration_ms: int | None = Field(
         default=None,
         ge=0,
         description="How long to display this frame in milliseconds. "
         "None or 0 means display indefinitely.",
     )
-    metadata: Optional[dict] = Field(
+    metadata: dict | None = Field(
         default=None, description="Optional metadata for debugging"
     )
 
@@ -75,7 +75,7 @@ class PlaybackMode(BaseModel):
     """Playback configuration for a content sequence."""
 
     loop: bool = Field(default=False, description="Whether to loop through frames")
-    loop_count: Optional[int] = Field(
+    loop_count: int | None = Field(
         default=None,
         ge=1,
         description="How many times to loop (null = infinite if loop=true)",
@@ -99,9 +99,50 @@ class Content(BaseModel):
     playback: PlaybackMode = Field(
         default_factory=PlaybackMode, description="Playback configuration"
     )
-    metadata: Optional[dict] = Field(
+    metadata: dict | None = Field(
         default=None, description="Optional metadata for debugging"
     )
+
+    @field_validator("frames")
+    @classmethod
+    def validate_frame_dimensions(cls, frames: list[Frame]) -> list[Frame]:
+        """Validate that all frames have consistent dimensions."""
+        if not frames:
+            raise ValueError("At least one frame is required")
+
+        first_frame = frames[0]
+        width, height = first_frame.width, first_frame.height
+
+        for i, frame in enumerate(frames[1:], start=1):
+            if frame.width != width or frame.height != height:
+                raise ValueError(
+                    f"Frame {i} has dimensions {frame.width}x{frame.height}, "
+                    f"but frame 0 has {width}x{height}. All frames must match."
+                )
+
+        return frames
+
+    def validate_display_dimensions(
+        self, display_width: int, display_height: int
+    ) -> None:
+        """
+        Validate that content dimensions match the display.
+
+        Args:
+            display_width: Expected display width in pixels
+            display_height: Expected display height in pixels
+
+        Raises:
+            ValueError: If frame dimensions don't match display
+        """
+        if self.frames:
+            frame = self.frames[0]
+            if frame.width != display_width or frame.height != display_height:
+                raise ValueError(
+                    f"Content {self.content_id} has frame dimensions "
+                    f"{frame.width}x{frame.height}, but display is "
+                    f"{display_width}x{display_height}"
+                )
 
 
 class ResponseStatus(str, Enum):
@@ -116,7 +157,7 @@ class ContentResponse(BaseModel):
     """Response from the content server."""
 
     status: ResponseStatus = Field(..., description="Status of the response")
-    content: Optional[Content] = Field(
+    content: Content | None = Field(
         default=None, description="Content data (only if status=updated)"
     )
     poll_interval_ms: int = Field(
@@ -125,7 +166,7 @@ class ContentResponse(BaseModel):
 
     @field_validator("content")
     @classmethod
-    def validate_content(cls, v: Optional[Content], info) -> Optional[Content]:
+    def validate_content(cls, v: Content | None, info) -> Content | None:
         """Validate that content is present when status is updated."""
         status = info.data.get("status")
         if status == ResponseStatus.UPDATED and v is None:
@@ -139,10 +180,8 @@ class AuthConfig(BaseModel):
     type: Literal["bearer", "api_key"] = Field(
         default="api_key", description="Authentication type"
     )
-    token: Optional[str] = Field(
-        default=None, description="Bearer token (if type=bearer)"
-    )
-    key: Optional[str] = Field(default=None, description="API key (if type=api_key)")
+    token: str | None = Field(default=None, description="Bearer token (if type=bearer)")
+    key: str | None = Field(default=None, description="API key (if type=api_key)")
     header_name: str = Field(
         default="X-API-Key", description="Header name for API key auth"
     )
@@ -160,9 +199,7 @@ class DriverConfig(BaseModel):
     """Configuration for the flipdot driver."""
 
     # Server configuration
-    poll_endpoint: str = Field(
-        ..., description="URL to poll for content updates"
-    )
+    poll_endpoint: str = Field(..., description="URL to poll for content updates")
     poll_interval_ms: int = Field(
         default=30000, ge=1000, description="Default polling interval"
     )
@@ -184,7 +221,7 @@ class DriverConfig(BaseModel):
     )
 
     # Hardware configuration
-    serial_device: Optional[str] = Field(
+    serial_device: str | None = Field(
         default=None, description="Serial device path (e.g., /dev/ttyUSB0)"
     )
     serial_baudrate: int = Field(default=57600, description="Serial baud rate")
@@ -192,9 +229,7 @@ class DriverConfig(BaseModel):
         default=[[1], [2]], description="Layout of flipdot modules"
     )
     module_width: int = Field(default=28, description="Width of each module in pixels")
-    module_height: int = Field(
-        default=7, description="Height of each module in pixels"
-    )
+    module_height: int = Field(default=7, description="Height of each module in pixels")
 
     # Behavior configuration
     error_fallback: ErrorFallback = Field(

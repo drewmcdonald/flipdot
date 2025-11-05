@@ -112,6 +112,14 @@ class FlipDotDriver:
 
         # Process response
         if response.status == ResponseStatus.UPDATED and response.content:
+            # Validate content dimensions against display before queuing
+            height, width = self.panel.dimensions
+            try:
+                response.content.validate_display_dimensions(width, height)
+            except ValueError as e:
+                logger.error(f"Rejecting content due to dimension mismatch: {e}")
+                return
+
             # Check if we should replace existing content with same ID
             if not self.queue.replace_if_same_id(response.content):
                 # Add as new content
@@ -179,16 +187,8 @@ class FlipDotDriver:
             return
 
         try:
-            # Validate frame dimensions
-            height, width = self.panel.dimensions
-            if frame.width != width or frame.height != height:
-                logger.error(
-                    f"Frame dimensions ({frame.height}x{frame.width}) "
-                    f"don't match display ({height}x{width})"
-                )
-                return
-
             # Convert frame to serial data and send
+            # (dimensions are already validated when content is queued)
             frame_data = frame.decode_data()
             serial_data = self.panel.set_content_from_frame(
                 frame_data, frame.width, frame.height
