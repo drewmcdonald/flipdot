@@ -6,8 +6,8 @@ Higher priority content can interrupt lower priority content.
 """
 
 import logging
+import threading
 import time
-from typing import Optional
 
 from flipdot.driver.models import Content, Frame
 
@@ -23,7 +23,7 @@ class ContentState:
         self.loop_count = 0
         self.frame_start_time = time.time()
         self.paused = False
-        self.paused_at: Optional[float] = None
+        self.paused_at: float | None = None
         self.time_paused: float = 0  # Total time spent paused
 
     @property
@@ -46,7 +46,10 @@ class ContentState:
                 return True
 
             # Looping with a count limit
-            if playback.loop_count is not None and self.loop_count >= playback.loop_count:
+            if (
+                playback.loop_count is not None
+                and self.loop_count >= playback.loop_count
+            ):
                 return True
 
         return False
@@ -116,12 +119,16 @@ class ContentQueue:
 
     Higher priority content interrupts lower priority content.
     When an interruption completes, the previous content resumes.
+
+    Thread-safe for concurrent access from push server and main thread.
+    All public methods are protected by a reentrant lock to prevent race conditions.
     """
 
     def __init__(self):
-        self.current: Optional[ContentState] = None
+        self.current: ContentState | None = None
         self.queue: list[ContentState] = []  # Sorted by priority (highest first)
         self.interrupted: list[ContentState] = []  # Stack of interrupted content
+        self._lock = threading.RLock()  # Reentrant lock for thread safety
 
     def add_content(self, content: Content) -> None:
         """
@@ -133,41 +140,40 @@ class ContentQueue:
         Args:
             content: Content to add
         """
-        new_state = ContentState(content)
-        priority = content.playback.priority
+        with self._lock:
+            new_state = ContentState(content)
+            priority = content.playback.priority
 
-        logger.info(
-            f"Adding content {content.content_id} with priority {priority}"
-        )
+            logger.info(f"Adding content {content.content_id} with priority {priority}")
 
-        # If nothing is playing, start this immediately
-        if self.current is None:
-            self.current = new_state
-            logger.info(f"Started playing {content.content_id} (queue was empty)")
-            return
-
-        current_priority = self.current.content.playback.priority
-
-        # Higher priority interrupts current content
-        if priority > current_priority:
-            if self.current.content.playback.interruptible:
-                logger.info(
-                    f"Interrupting {self.current.content.content_id} "
-                    f"(priority {current_priority}) with {content.content_id} "
-                    f"(priority {priority})"
-                )
-                self.current.pause()
-                self.interrupted.append(self.current)
+            # If nothing is playing, start this immediately
+            if self.current is None:
                 self.current = new_state
+                logger.info(f"Started playing {content.content_id} (queue was empty)")
+                return
+
+            current_priority = self.current.content.playback.priority
+
+            # Higher priority interrupts current content
+            if priority > current_priority:
+                if self.current.content.playback.interruptible:
+                    logger.info(
+                        f"Interrupting {self.current.content.content_id} "
+                        f"(priority {current_priority}) with {content.content_id} "
+                        f"(priority {priority})"
+                    )
+                    self.current.pause()
+                    self.interrupted.append(self.current)
+                    self.current = new_state
+                else:
+                    logger.warning(
+                        f"Cannot interrupt {self.current.content.content_id} "
+                        f"(marked as non-interruptible)"
+                    )
+                    self._add_to_queue(new_state)
             else:
-                logger.warning(
-                    f"Cannot interrupt {self.current.content.content_id} "
-                    f"(marked as non-interruptible)"
-                )
+                # Add to queue in priority order
                 self._add_to_queue(new_state)
-        else:
-            # Add to queue in priority order
-            self._add_to_queue(new_state)
 
     def _add_to_queue(self, state: ContentState) -> None:
         """Add a state to the queue in priority order (highest first)."""
@@ -186,7 +192,7 @@ class ContentQueue:
             f"Added {state.content.content_id} to queue at position {insert_idx}"
         )
 
-    def update(self) -> Optional[Frame]:
+    def update(self) -> Frame | None:
         """
         Update the queue state and return the current frame to display.
 
@@ -198,51 +204,59 @@ class ContentQueue:
         Returns:
             The current frame to display, or None if nothing to display
         """
-        if self.current is None:
-            return None
-
-        # Try to advance the frame
-        if self.current.advance_frame():
-            logger.debug(
-                f"Advanced to frame {self.current.frame_index} "
-                f"of {self.current.content.content_id}"
-            )
-
-        # Check if current content is complete
-        if self.current.is_complete:
-            logger.info(f"Content {self.current.content.content_id} completed")
-
-            # Check if there was interrupted content to resume
-            if self.interrupted:
-                self.current = self.interrupted.pop()
-                self.current.resume()
-                logger.info(f"Resumed interrupted content {self.current.content.content_id}")
-            # Otherwise, move to next in queue
-            elif self.queue:
-                self.current = self.queue.pop(0)
-                logger.info(f"Started next queued content {self.current.content.content_id}")
-            else:
-                # Nothing left to display
-                self.current = None
-                logger.info("Queue is empty")
+        with self._lock:
+            if self.current is None:
                 return None
 
-        return self.current.current_frame if self.current else None
+            # Try to advance the frame
+            if self.current.advance_frame():
+                logger.debug(
+                    f"Advanced to frame {self.current.frame_index} "
+                    f"of {self.current.content.content_id}"
+                )
+
+            # Check if current content is complete
+            if self.current.is_complete:
+                logger.info(f"Content {self.current.content.content_id} completed")
+
+                # Check if there was interrupted content to resume
+                if self.interrupted:
+                    self.current = self.interrupted.pop()
+                    self.current.resume()
+                    logger.info(
+                        f"Resumed interrupted content {self.current.content.content_id}"
+                    )
+                # Otherwise, move to next in queue
+                elif self.queue:
+                    self.current = self.queue.pop(0)
+                    logger.info(
+                        f"Started next queued content {self.current.content.content_id}"
+                    )
+                else:
+                    # Nothing left to display
+                    self.current = None
+                    logger.info("Queue is empty")
+                    return None
+
+            return self.current.current_frame if self.current else None
 
     def clear(self) -> None:
         """Clear all content from the queue."""
-        logger.info("Clearing content queue")
-        self.current = None
-        self.queue.clear()
-        self.interrupted.clear()
+        with self._lock:
+            logger.info("Clearing content queue")
+            self.current = None
+            self.queue.clear()
+            self.interrupted.clear()
 
     def has_content(self) -> bool:
         """Check if there's any content to display."""
-        return self.current is not None
+        with self._lock:
+            return self.current is not None
 
-    def get_current_content_id(self) -> Optional[str]:
+    def get_current_content_id(self) -> str | None:
         """Get the ID of the currently playing content."""
-        return self.current.content.content_id if self.current else None
+        with self._lock:
+            return self.current.content.content_id if self.current else None
 
     def replace_if_same_id(self, content: Content) -> bool:
         """
@@ -254,27 +268,28 @@ class ContentQueue:
         Returns:
             True if replaced, False if not found
         """
-        if self.current and self.current.content.content_id == content.content_id:
-            logger.info(f"Replacing current content {content.content_id}")
-            # Keep the current frame index and timing if possible
-            old_frame_idx = self.current.frame_index
-            self.current = ContentState(content)
-            if old_frame_idx < len(content.frames):
-                self.current.frame_index = old_frame_idx
-            return True
-
-        # Check queue
-        for i, state in enumerate(self.queue):
-            if state.content.content_id == content.content_id:
-                logger.info(f"Replacing queued content {content.content_id}")
-                self.queue[i] = ContentState(content)
+        with self._lock:
+            if self.current and self.current.content.content_id == content.content_id:
+                logger.info(f"Replacing current content {content.content_id}")
+                # Keep the current frame index and timing if possible
+                old_frame_idx = self.current.frame_index
+                self.current = ContentState(content)
+                if old_frame_idx < len(content.frames):
+                    self.current.frame_index = old_frame_idx
                 return True
 
-        # Check interrupted
-        for i, state in enumerate(self.interrupted):
-            if state.content.content_id == content.content_id:
-                logger.info(f"Replacing interrupted content {content.content_id}")
-                self.interrupted[i] = ContentState(content)
-                return True
+            # Check queue
+            for i, state in enumerate(self.queue):
+                if state.content.content_id == content.content_id:
+                    logger.info(f"Replacing queued content {content.content_id}")
+                    self.queue[i] = ContentState(content)
+                    return True
 
-        return False
+            # Check interrupted
+            for i, state in enumerate(self.interrupted):
+                if state.content.content_id == content.content_id:
+                    logger.info(f"Replacing interrupted content {content.content_id}")
+                    self.interrupted[i] = ContentState(content)
+                    return True
+
+            return False
