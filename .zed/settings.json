@@ -26,24 +26,14 @@
       ]
     },
     "TypeScript": {
-      "tab_size": 2,
-      "code_actions_on_format": {
-        "source.fixAll.eslint": true,
-        "source.organizeImports": true
-      }
+      "language_servers": ["deno", "!typescript-language-server"],
+      "format_on_save": "on",
+      "formatter": "language_server"
     },
     "TSX": {
-      "tab_size": 2,
-      "code_actions_on_format": {
-        "source.fixAll.eslint": true,
-        "source.organizeImports": true
-      }
-    },
-    "JavaScript": {
-      "tab_size": 2
-    },
-    "JSON": {
-      "tab_size": 2
+      "language_servers": ["deno", "!typescript-language-server"],
+      "format_on_save": "on",
+      "formatter": "language_server"
     }
   },
 
@@ -55,13 +45,13 @@
         }
       }
     },
-    "eslint": {
+    "deno": {
       "settings": {
-        "workingDirectories": [
-          {
-            "pattern": "frontend/"
-          }
-        ]
+        "deno": {
+          "enable": true,
+          "lint": true,
+          "unstable": true
+        }
       }
     }
   }
