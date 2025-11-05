@@ -137,7 +137,8 @@ class FlipDotDriver:
         height, width = self.panel.dimensions
         blank = [[0] * width for _ in range(height)]
         serial_data = self.panel.set_content(blank)
-        self.serial.write(serial_data)
+        if not self.serial.write(serial_data):
+            logger.error("Failed to clear display due to serial error")
 
     def _calculate_next_sleep_ms(self) -> float:
         """
@@ -193,7 +194,12 @@ class FlipDotDriver:
             serial_data = self.panel.set_content_from_frame(
                 frame_data, frame.width, frame.height
             )
-            self.serial.write(serial_data)
+
+            if not self.serial.write(serial_data):
+                logger.error("Failed to render frame: serial write failed")
+                # Note: We don't stop the driver on serial errors;
+                # the user can still receive new content and display will recover
+                # if the device is reconnected
 
         except Exception as e:
             logger.error(f"Error rendering frame: {e}", exc_info=True)

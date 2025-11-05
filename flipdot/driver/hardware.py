@@ -7,7 +7,9 @@ startup times on Raspberry Pi.
 Adapted from https://github.com/chrishemmings/flipPyDot
 """
 
-from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     import serial
@@ -35,7 +37,7 @@ def pack_bits_little_endian(bits: list[int]) -> bytes:
         byte = 0
         for j in range(8):
             if i + j < len(bits) and bits[i + j]:
-                byte |= (1 << j)  # Little-endian: LSB first
+                byte |= 1 << j  # Little-endian: LSB first
         result.append(byte)
     return bytes(result)
 
@@ -235,7 +237,9 @@ class Panel:
 
         return bytes(serial_data)
 
-    def set_content_from_frame(self, frame_data: bytes, width: int, height: int) -> bytes:
+    def set_content_from_frame(
+        self, frame_data: bytes, width: int, height: int
+    ) -> bytes:
         """
         Set content from packed frame data (as received from server).
 
@@ -280,7 +284,7 @@ class SerialConnection:
 
     def __init__(
         self,
-        device: Optional[str] = None,
+        device: str | None = None,
         baudrate: int = 57600,
         dev_mode: bool = False,
     ):
@@ -302,14 +306,45 @@ class SerialConnection:
                 raise ImportError("pyserial is required for serial communication")
             self._serial = serial.Serial(device, baudrate, timeout=1)
 
-    def write(self, data: bytes) -> None:
-        """Write data to serial or print in dev mode."""
+    def write(self, data: bytes) -> bool:
+        """
+        Write data to serial or print in dev mode.
+
+        Args:
+            data: Bytes to write
+
+        Returns:
+            True if write successful, False if failed
+        """
         if self.dev_mode:
-            print(f"[DEV] Would write {len(data)} bytes to serial: {data.hex()}")
-        elif self._serial:
-            self._serial.write(data)
-        else:
-            print(f"[WARN] No serial connection, skipping write")
+            logger.debug(f"[DEV] Would write {len(data)} bytes to serial: {data.hex()}")
+            return True
+
+        if not self._serial:
+            logger.error(
+                "Cannot write to serial: no connection. "
+                "Device may be disconnected or not initialized."
+            )
+            return False
+
+        try:
+            bytes_written = self._serial.write(data)
+            if bytes_written != len(data):
+                logger.error(
+                    f"Serial write incomplete: wrote {bytes_written}/{len(data)} bytes. "
+                    "Device buffer may be full or connection unstable."
+                )
+                return False
+            logger.debug(f"Successfully wrote {bytes_written} bytes to serial")
+            return True
+        except (OSError, getattr(serial, "SerialException", Exception)) as e:
+            logger.error(
+                f"Serial write failed: {e}. Device may be disconnected or malfunctioning."
+            )
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error writing to serial: {e}", exc_info=True)
+            return False
 
     def close(self) -> None:
         """Close the serial connection."""
