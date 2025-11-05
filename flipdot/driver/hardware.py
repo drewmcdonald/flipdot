@@ -7,7 +7,13 @@ startup times on Raspberry Pi.
 Adapted from https://github.com/chrishemmings/flipPyDot
 """
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from flipdot.driver.config import DriverLimits
 
 logger = logging.getLogger(__name__)
 
@@ -280,13 +286,14 @@ class Panel:
 
 
 class SerialConnection:
-    """Wrapper for serial connection with optional dev mode."""
+    """Wrapper for serial connection with optional dev mode and reconnection."""
 
     def __init__(
         self,
         device: str | None = None,
         baudrate: int = 57600,
         dev_mode: bool = False,
+        limits: DriverLimits | None = None,
     ):
         """
         Initialize serial connection.
@@ -295,20 +302,89 @@ class SerialConnection:
             device: Serial device path (e.g., /dev/ttyUSB0)
             baudrate: Baud rate for serial communication
             dev_mode: If True, print to console instead of serial
+            limits: Driver limits configuration (uses DEFAULT_LIMITS if None)
         """
+        from flipdot.driver.config import DEFAULT_LIMITS
+
         self.dev_mode = dev_mode
         self.device = device
         self.baudrate = baudrate
+        self.limits = limits if limits is not None else DEFAULT_LIMITS
         self._serial = None
+        self.consecutive_failures = 0
+        self.last_reconnect_attempt = 0.0
+        self.reconnect_backoff_ms = self.limits.serial.initial_reconnect_backoff_ms
 
         if not dev_mode and device:
             if serial is None:
                 raise ImportError("pyserial is required for serial communication")
-            self._serial = serial.Serial(device, baudrate, timeout=1)
+            self._connect()
+
+    def _connect(self) -> bool:
+        """
+        Attempt to connect to the serial device.
+
+        Returns:
+            True if connection successful, False otherwise
+        """
+        try:
+            self._serial = serial.Serial(self.device, self.baudrate, timeout=1)
+            self.consecutive_failures = 0
+            self.reconnect_backoff_ms = self.limits.serial.initial_reconnect_backoff_ms
+            logger.info(f"Connected to serial device {self.device}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect to {self.device}: {e}")
+            self._serial = None
+            return False
+
+    def _should_attempt_reconnect(self) -> bool:
+        """
+        Check if we should attempt reconnection based on backoff timing.
+
+        Returns:
+            True if enough time has passed to retry
+        """
+        import time
+
+        elapsed_ms = (time.time() - self.last_reconnect_attempt) * 1000
+        return elapsed_ms >= self.reconnect_backoff_ms
+
+    def _try_reconnect(self) -> bool:
+        """
+        Attempt to reconnect to the serial device with exponential backoff.
+
+        Returns:
+            True if reconnection successful, False otherwise
+        """
+        import time
+
+        if not self._should_attempt_reconnect():
+            return False
+
+        self.last_reconnect_attempt = time.time()
+        logger.info(
+            f"Attempting serial reconnection (failure count: {self.consecutive_failures})"
+        )
+
+        success = self._connect()
+
+        if not success:
+            # Exponential backoff
+            self.reconnect_backoff_ms = min(
+                self.reconnect_backoff_ms * 2,
+                self.limits.serial.max_reconnect_backoff_ms,
+            )
+            logger.warning(
+                f"Reconnection failed, will retry in {self.reconnect_backoff_ms}ms"
+            )
+
+        return success
 
     def write(self, data: bytes) -> bool:
         """
         Write data to serial or print in dev mode.
+        Attempts reconnection on failure with exponential backoff.
 
         Args:
             data: Bytes to write
@@ -320,29 +396,54 @@ class SerialConnection:
             logger.debug(f"[DEV] Would write {len(data)} bytes to serial: {data.hex()}")
             return True
 
+        # Try to reconnect if we don't have a connection
         if not self._serial:
-            logger.error(
-                "Cannot write to serial: no connection. "
-                "Device may be disconnected or not initialized."
-            )
-            return False
+            if not self._try_reconnect():
+                self.consecutive_failures += 1
+                if (
+                    self.consecutive_failures
+                    >= self.limits.serial.max_consecutive_failures
+                ):
+                    logger.error(
+                        f"Serial device unavailable after {self.consecutive_failures} "
+                        f"consecutive failures. Please check hardware connection."
+                    )
+                return False
 
         try:
             bytes_written = self._serial.write(data)
             if bytes_written != len(data):
+                self.consecutive_failures += 1
                 logger.error(
                     f"Serial write incomplete: wrote {bytes_written}/{len(data)} bytes. "
                     "Device buffer may be full or connection unstable."
                 )
                 return False
+
+            # Success - reset failure counter
+            if self.consecutive_failures > 0:
+                logger.info("Serial communication recovered")
+            self.consecutive_failures = 0
             logger.debug(f"Successfully wrote {bytes_written} bytes to serial")
             return True
+
         except (OSError, getattr(serial, "SerialException", Exception)) as e:
+            self.consecutive_failures += 1
             logger.error(
-                f"Serial write failed: {e}. Device may be disconnected or malfunctioning."
+                f"Serial write failed: {e}. "
+                f"Device may be disconnected (failure {self.consecutive_failures}/{self.limits.serial.max_consecutive_failures})."
             )
+            # Close and mark for reconnection
+            if self._serial:
+                try:
+                    self._serial.close()
+                except Exception:
+                    pass
+                self._serial = None
             return False
+
         except Exception as e:
+            self.consecutive_failures += 1
             logger.error(f"Unexpected error writing to serial: {e}", exc_info=True)
             return False
 

@@ -5,11 +5,17 @@ The queue manages what content to display and when to advance frames.
 Higher priority content can interrupt lower priority content.
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
+from typing import TYPE_CHECKING
 
 from flipdot.driver.models import Content, Frame
+
+if TYPE_CHECKING:
+    from flipdot.driver.config import DriverLimits
 
 logger = logging.getLogger(__name__)
 
@@ -125,13 +131,16 @@ class ContentQueue:
     Enforces memory bounds to prevent OOM from malicious/buggy servers.
     """
 
-    # Maximum number of items to queue (prevents OOM attacks)
-    MAX_QUEUED_ITEMS = 50
+    def __init__(self, limits: DriverLimits | None = None):
+        """
+        Initialize the content queue.
 
-    # Maximum number of interrupted items to keep on stack
-    MAX_INTERRUPTED_ITEMS = 10
+        Args:
+            limits: Driver limits configuration (uses DEFAULT_LIMITS if None)
+        """
+        from flipdot.driver.config import DEFAULT_LIMITS
 
-    def __init__(self):
+        self.limits = limits if limits is not None else DEFAULT_LIMITS
         self.current: ContentState | None = None
         self.queue: list[ContentState] = []  # Sorted by priority (highest first)
         self.interrupted: list[ContentState] = []  # Stack of interrupted content
@@ -151,7 +160,9 @@ class ContentQueue:
             new_state = ContentState(content)
             priority = content.playback.priority
 
-            logger.info(f"Adding content {content.content_id} with priority {priority}")
+            logger.debug(
+                f"Adding content {content.content_id} with priority {priority}"
+            )
 
             # If nothing is playing, start this immediately
             if self.current is None:
@@ -173,7 +184,7 @@ class ContentQueue:
                     self.interrupted.append(self.current)
 
                     # Enforce memory bound on interrupted stack
-                    if len(self.interrupted) > self.MAX_INTERRUPTED_ITEMS:
+                    if len(self.interrupted) > self.limits.queue.max_interrupted_items:
                         dropped = self.interrupted.pop(0)
                         logger.warning(
                             f"Interrupted stack overflow: dropped {dropped.content.content_id}"
@@ -209,7 +220,7 @@ class ContentQueue:
         self.queue.insert(insert_idx, state)
 
         # Enforce memory bound: drop lowest-priority item if queue is too full
-        if len(self.queue) > self.MAX_QUEUED_ITEMS:
+        if len(self.queue) > self.limits.queue.max_queued_items:
             dropped = self.queue.pop()
             logger.warning(
                 f"Queue overflow: dropped {dropped.content.content_id} "

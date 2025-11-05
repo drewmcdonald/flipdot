@@ -7,24 +7,14 @@ readme = "README.md"
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.10"
-freetype-py = "^2.5.1"
-numpy = "^2.2.2"
+python = "^3.11"
 pyserial = "^3.5"
-fastapi = "^0.115.7"
 pydantic = "^2.10.6"
-uvicorn = "^0.34.0"
-python-dotenv = "^1.0.1"
-requests = "^2.32.3"
-pendulum = "^3.0.0"
-aiofiles = "^23.2.1"
-
 
 [tool.poetry.group.dev.dependencies]
 typing-extensions = "^4.12.2"
 isort = "^5.13.2"
 black = "^24.10.0"
-types-requests = "^2.32.0.20241016"
 mypy = "^1.15.0"
 ruff = "^0.9.6"
 types-pyserial = "^3.5.0.20250130"

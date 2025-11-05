@@ -1,18 +1,24 @@
 """
-HTTP push server for receiving content updates via POST.
+HTTP server for receiving content updates via POST.
 
 Runs in a separate thread and allows the remote server to push
 high-priority content (like notifications) immediately instead of
 waiting for the next poll.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import threading
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Callable, Optional
+from typing import TYPE_CHECKING
 
 from flipdot.driver.models import AuthConfig, Content
+
+if TYPE_CHECKING:
+    from flipdot.driver.config import DriverLimits
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +27,9 @@ class PushRequestHandler(BaseHTTPRequestHandler):
     """HTTP request handler for push notifications."""
 
     # Class variables set by PushServer
-    auth_config: Optional[AuthConfig] = None
-    content_callback: Optional[Callable[[Content], None]] = None
+    auth_config: AuthConfig | None = None
+    content_callback: Callable[[Content], None] | None = None
+    limits: DriverLimits | None = None
 
     def _authenticate(self) -> bool:
         """
@@ -60,9 +67,24 @@ class PushRequestHandler(BaseHTTPRequestHandler):
             self._send_json_response(401, {"error": "Unauthorized"})
             return
 
-        # Read body
+        # Read body with size limit
         try:
+            from flipdot.driver.config import DEFAULT_LIMITS
+
             content_length = int(self.headers.get("Content-Length", 0))
+
+            limits = self.limits if self.limits is not None else DEFAULT_LIMITS
+            if content_length > limits.server.max_request_size:
+                logger.warning(
+                    f"Request too large: {content_length} bytes (max {limits.server.max_request_size})"
+                )
+                self._send_json_response(413, {"error": "Request too large"})
+                return
+
+            if content_length == 0:
+                self._send_json_response(400, {"error": "Empty request"})
+                return
+
             body = self.rfile.read(content_length).decode("utf-8")
             data = json.loads(body)
 
@@ -109,6 +131,7 @@ class PushServer:
         port: int,
         auth: AuthConfig,
         content_callback: Callable[[Content], None],
+        limits: DriverLimits | None = None,
     ):
         """
         Initialize the push server.
@@ -118,18 +141,23 @@ class PushServer:
             port: Port to listen on
             auth: Authentication configuration
             content_callback: Function to call when content is received
+            limits: Driver limits configuration
         """
+        from flipdot.driver.config import DEFAULT_LIMITS
+
         self.host = host
         self.port = port
         self.auth = auth
         self.content_callback = content_callback
+        self.limits = limits if limits is not None else DEFAULT_LIMITS
 
         # Configure the handler class
         PushRequestHandler.auth_config = auth
         PushRequestHandler.content_callback = content_callback
+        PushRequestHandler.limits = self.limits
 
         self.server = HTTPServer((host, port), PushRequestHandler)
-        self.thread: Optional[threading.Thread] = None
+        self.thread: threading.Thread | None = None
         self.running = False
 
     def start(self) -> None:

@@ -19,12 +19,14 @@ def pack_bits_little_endian(bits: list[int]) -> bytes:
         byte = 0
         for j in range(8):
             if i + j < len(bits) and bits[i + j]:
-                byte |= (1 << j)
+                byte |= 1 << j
         result.append(byte)
     return bytes(result)
 
 
-def create_frame(width: int, height: int, pattern: list[list[int]], duration_ms: int = None):
+def create_frame(
+    width: int, height: int, pattern: list[list[int]], duration_ms: int = None
+):
     """
     Create a frame from a 2D bit pattern.
 

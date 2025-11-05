@@ -3,11 +3,8 @@ Comprehensive tests for the flipdot driver implementation.
 """
 
 import base64
-import json
 import time
-from http.server import HTTPServer
-from threading import Thread
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 from urllib.error import HTTPError, URLError
 
 import pytest
@@ -30,15 +27,16 @@ from flipdot.driver.models import (
     ResponseStatus,
 )
 from flipdot.driver.queue import ContentQueue, ContentState
-from flipdot.driver.server import PushRequestHandler, PushServer
-
+from flipdot.driver.server import PushServer
 
 # =============================================================================
 # Test Utilities
 # =============================================================================
 
 
-def create_test_frame(width: int = 2, height: int = 2, duration_ms: int = 1000) -> Frame:
+def create_test_frame(
+    width: int = 2, height: int = 2, duration_ms: int = 1000
+) -> Frame:
     """Create a simple test frame."""
     bits = [1, 0] * ((width * height) // 2)
     if len(bits) < width * height:
@@ -57,9 +55,7 @@ def create_test_content(
 ) -> Content:
     """Create test content with specified parameters."""
     frames = [create_test_frame() for _ in range(num_frames)]
-    playback = PlaybackMode(
-        loop=loop, priority=priority, interruptible=interruptible
-    )
+    playback = PlaybackMode(loop=loop, priority=priority, interruptible=interruptible)
     return Content(content_id=content_id, frames=frames, playback=playback)
 
 
@@ -104,7 +100,7 @@ class TestBitPacking:
     def test_pack_bits_empty(self):
         """Test packing empty bit list."""
         packed = pack_bits_little_endian([])
-        assert packed == bytes()
+        assert packed == b""
 
     def test_pack_bits_single_bit(self):
         """Test packing single bit."""
@@ -1296,7 +1292,9 @@ class TestIntegration:
         packed = pack_bits_little_endian(bits)
         b64 = base64.b64encode(packed).decode()
 
-        frame = Frame(data_b64=b64, width=width, height=height, duration_ms=None)  # No duration
+        frame = Frame(
+            data_b64=b64, width=width, height=height, duration_ms=None
+        )  # No duration
 
         # Create content
         content = Content(

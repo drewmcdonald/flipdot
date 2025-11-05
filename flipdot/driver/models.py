@@ -7,7 +7,7 @@ Frames contain base64-encoded packed bit data for efficiency.
 
 import base64
 from enum import Enum
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -90,6 +90,16 @@ class PlaybackMode(BaseModel):
         default=True, description="Can this content be interrupted by higher priority?"
     )
 
+    @field_validator("loop_count")
+    @classmethod
+    def validate_loop_count(cls, v: int | None, info) -> int | None:
+        """Validate that loop_count requires loop=True."""
+        if v is not None:
+            loop = info.data.get("loop", False)
+            if not loop:
+                raise ValueError("loop_count can only be set when loop=True")
+        return v
+
 
 class Content(BaseModel):
     """A sequence of frames with playback instructions."""
@@ -103,24 +113,75 @@ class Content(BaseModel):
         default=None, description="Optional metadata for debugging"
     )
 
+    # Security limits to prevent OOM attacks
+    # These defaults match config.py DEFAULT_LIMITS
+    MAX_FRAMES_PER_CONTENT: ClassVar[int] = 1000
+    MAX_TOTAL_BYTES: ClassVar[int] = 5 * 1024 * 1024  # 5MB
+    MAX_METADATA_BYTES: ClassVar[int] = 10 * 1024  # 10KB
+
     @field_validator("frames")
     @classmethod
     def validate_frame_dimensions(cls, frames: list[Frame]) -> list[Frame]:
-        """Validate that all frames have consistent dimensions."""
+        """Validate that all frames have consistent dimensions and enforce limits."""
         if not frames:
             raise ValueError("At least one frame is required")
+
+        # Enforce frame count limit to prevent OOM
+        if len(frames) > cls.MAX_FRAMES_PER_CONTENT:
+            raise ValueError(
+                f"Too many frames: {len(frames)} exceeds limit of {cls.MAX_FRAMES_PER_CONTENT}"
+            )
 
         first_frame = frames[0]
         width, height = first_frame.width, first_frame.height
 
-        for i, frame in enumerate(frames[1:], start=1):
-            if frame.width != width or frame.height != height:
+        # Calculate total byte size while validating
+        total_bytes = 0
+        for i, frame in enumerate(frames):
+            if i > 0 and (frame.width != width or frame.height != height):
                 raise ValueError(
                     f"Frame {i} has dimensions {frame.width}x{frame.height}, "
                     f"but frame 0 has {width}x{height}. All frames must match."
                 )
 
+            # Add size of decoded frame data
+            total_bytes += len(frame.decode_data())
+
+            # Add approximate size of metadata (if present)
+            if frame.metadata:
+                import json
+
+                metadata_size = len(json.dumps(frame.metadata).encode("utf-8"))
+                if metadata_size > cls.MAX_METADATA_BYTES:
+                    raise ValueError(
+                        f"Frame {i} metadata too large: {metadata_size} bytes exceeds limit of {cls.MAX_METADATA_BYTES}"
+                    )
+                total_bytes += metadata_size
+
+        # Enforce total memory limit
+        if total_bytes > cls.MAX_TOTAL_BYTES:
+            raise ValueError(
+                f"Content too large: {total_bytes} bytes exceeds limit of {cls.MAX_TOTAL_BYTES}"
+            )
+
         return frames
+
+    @field_validator("metadata")
+    @classmethod
+    def validate_metadata_size(cls, v: dict | None) -> dict | None:
+        """Validate that metadata doesn't exceed size limit."""
+        if v is None:
+            return v
+
+        import json
+
+        metadata_size = len(json.dumps(v).encode("utf-8"))
+        if metadata_size > cls.MAX_METADATA_BYTES:
+            raise ValueError(
+                f"Content metadata too large: {metadata_size} bytes exceeds limit of {cls.MAX_METADATA_BYTES}"
+            )
+
+        return v
 
     def validate_display_dimensions(
         self, display_width: int, display_height: int

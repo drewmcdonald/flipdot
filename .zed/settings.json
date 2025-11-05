@@ -1,0 +1,58 @@
+{
+  "format_on_save": "on",
+  "remove_trailing_whitespace_on_save": true,
+  "ensure_final_newline_on_save": true,
+
+  "languages": {
+    "Python": {
+      "tab_size": 4,
+      "language_servers": ["basedpyright", "ruff", "..."],
+      "formatter": [
+        {
+          "language_server": {
+            "name": "ruff"
+          }
+        }
+      ]
+    },
+    "TypeScript": {
+      "tab_size": 2,
+      "code_actions_on_format": {
+        "source.fixAll.eslint": true,
+        "source.organizeImports": true
+      }
+    },
+    "TSX": {
+      "tab_size": 2,
+      "code_actions_on_format": {
+        "source.fixAll.eslint": true,
+        "source.organizeImports": true
+      }
+    },
+    "JavaScript": {
+      "tab_size": 2
+    },
+    "JSON": {
+      "tab_size": 2
+    }
+  },
+
+  "lsp": {
+    "basedpyright": {
+      "settings": {
+        "python": {
+          "pythonPath": ".venv/bin/python"
+        }
+      }
+    },
+    "eslint": {
+      "settings": {
+        "workingDirectories": [
+          {
+            "pattern": "frontend/"
+          }
+        ]
+      }
+    }
+  }
+}

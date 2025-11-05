@@ -4,13 +4,19 @@ HTTP client for fetching content from the remote server.
 Handles polling for updates and authentication.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import time
+from typing import TYPE_CHECKING
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from flipdot.driver.models import AuthConfig, ContentResponse, ErrorFallback
+
+if TYPE_CHECKING:
+    from flipdot.driver.config import DriverLimits
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +28,7 @@ class ContentClient:
         self,
         endpoint: str,
         auth: AuthConfig,
-        timeout: int = 10,
+        limits: DriverLimits | None = None,
     ):
         """
         Initialize the content client.
@@ -30,19 +36,17 @@ class ContentClient:
         Args:
             endpoint: URL to poll for content
             auth: Authentication configuration
-            timeout: Request timeout in seconds
+            limits: Driver limits configuration (uses DEFAULT_LIMITS if None)
         """
+        from flipdot.driver.config import DEFAULT_LIMITS
+
         self.endpoint = endpoint
         self.auth = auth
-        self.timeout = timeout
+        self.limits = limits if limits is not None else DEFAULT_LIMITS
+        self.timeout = self.limits.client.timeout_seconds
         self.last_poll_time: float | None = None
         self.poll_interval_ms = 30000  # Default, can be updated by server
         self.consecutive_errors = 0
-
-        # Exponential backoff for network failures
-        self.max_backoff_ms = 300000  # 5 minutes max backoff
-        self.backoff_multiplier = 2.0
-        self.initial_backoff_ms = 1000  # 1 second initial backoff
 
     def _build_headers(self) -> dict[str, str]:
         """Build HTTP headers including authentication."""
@@ -82,10 +86,17 @@ class ContentClient:
                 self.last_poll_time = time.time()
                 self.consecutive_errors = 0
 
-                logger.info(
-                    f"Fetched content (status={content_response.status}) "
-                    f"in {elapsed:.2f}s, next poll in {self.poll_interval_ms}ms"
-                )
+                # Only log at INFO for UPDATED status, use DEBUG for NO_CHANGE
+                if content_response.status.value == "updated":
+                    logger.info(
+                        f"Fetched content (status={content_response.status}) "
+                        f"in {elapsed:.2f}s, next poll in {self.poll_interval_ms}ms"
+                    )
+                else:
+                    logger.debug(
+                        f"Fetched content (status={content_response.status}) "
+                        f"in {elapsed:.2f}s, next poll in {self.poll_interval_ms}ms"
+                    )
 
                 return content_response
 
@@ -125,10 +136,10 @@ class ContentClient:
             return self.poll_interval_ms
 
         # Exponential backoff: 1s, 2s, 4s, 8s, ... up to max_backoff_ms
-        backoff = self.initial_backoff_ms * (
-            self.backoff_multiplier ** (self.consecutive_errors - 1)
+        backoff = self.limits.client.initial_backoff_ms * (
+            self.limits.client.backoff_multiplier ** (self.consecutive_errors - 1)
         )
-        backoff = min(backoff, self.max_backoff_ms)
+        backoff = min(backoff, self.limits.client.max_backoff_ms)
 
         return max(self.poll_interval_ms, backoff)
 
