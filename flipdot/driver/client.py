@@ -7,7 +7,6 @@ Handles polling for updates and authentication.
 import json
 import logging
 import time
-from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -36,9 +35,14 @@ class ContentClient:
         self.endpoint = endpoint
         self.auth = auth
         self.timeout = timeout
-        self.last_poll_time: Optional[float] = None
+        self.last_poll_time: float | None = None
         self.poll_interval_ms = 30000  # Default, can be updated by server
         self.consecutive_errors = 0
+
+        # Exponential backoff for network failures
+        self.max_backoff_ms = 300000  # 5 minutes max backoff
+        self.backoff_multiplier = 2.0
+        self.initial_backoff_ms = 1000  # 1 second initial backoff
 
     def _build_headers(self) -> dict[str, str]:
         """Build HTTP headers including authentication."""
@@ -54,7 +58,7 @@ class ContentClient:
 
         return headers
 
-    def fetch_content(self) -> Optional[ContentResponse]:
+    def fetch_content(self) -> ContentResponse | None:
         """
         Fetch content from the server.
 
@@ -110,6 +114,24 @@ class ContentClient:
             logger.error(f"Unexpected error fetching content: {e}")
             return None
 
+    def _get_effective_poll_interval(self) -> float:
+        """
+        Calculate effective poll interval with exponential backoff on errors.
+
+        Returns:
+            Poll interval in milliseconds, including backoff
+        """
+        if self.consecutive_errors == 0:
+            return self.poll_interval_ms
+
+        # Exponential backoff: 1s, 2s, 4s, 8s, ... up to max_backoff_ms
+        backoff = self.initial_backoff_ms * (
+            self.backoff_multiplier ** (self.consecutive_errors - 1)
+        )
+        backoff = min(backoff, self.max_backoff_ms)
+
+        return max(self.poll_interval_ms, backoff)
+
     def should_poll(self) -> bool:
         """
         Check if enough time has elapsed for the next poll.
@@ -121,11 +143,14 @@ class ContentClient:
             return True
 
         elapsed_ms = (time.time() - self.last_poll_time) * 1000
-        return elapsed_ms >= self.poll_interval_ms
+        effective_interval = self._get_effective_poll_interval()
+        return elapsed_ms >= effective_interval
 
     def get_next_poll_delay_ms(self) -> float:
         """
         Get the time until the next poll should occur.
+
+        Accounts for exponential backoff on errors.
 
         Returns:
             Milliseconds to wait before next poll (0 if should poll now)
@@ -134,7 +159,8 @@ class ContentClient:
             return 0
 
         elapsed_ms = (time.time() - self.last_poll_time) * 1000
-        remaining = self.poll_interval_ms - elapsed_ms
+        effective_interval = self._get_effective_poll_interval()
+        remaining = effective_interval - elapsed_ms
         return max(0, remaining)
 
     def reset_poll_timer(self) -> None:
@@ -153,14 +179,14 @@ class ErrorHandler:
             fallback: Fallback behavior configuration
         """
         self.fallback = fallback
-        self.last_successful_content: Optional[ContentResponse] = None
+        self.last_successful_content: ContentResponse | None = None
 
     def set_last_successful(self, response: ContentResponse) -> None:
         """Record the last successful content fetch."""
         if response.content:
             self.last_successful_content = response
 
-    def get_fallback_response(self) -> Optional[ContentResponse]:
+    def get_fallback_response(self) -> ContentResponse | None:
         """
         Get the appropriate fallback response based on configuration.
 
@@ -178,6 +204,7 @@ class ErrorHandler:
         elif self.fallback == ErrorFallback.BLANK:
             logger.info("Fallback: clearing display")
             from flipdot.driver.models import ResponseStatus
+
             return ContentResponse(
                 status=ResponseStatus.CLEAR,
                 poll_interval_ms=30000,
@@ -187,6 +214,7 @@ class ErrorHandler:
             # For now, just clear. In the future, could generate an error message frame
             logger.info("Fallback: showing error state")
             from flipdot.driver.models import ResponseStatus
+
             return ContentResponse(
                 status=ResponseStatus.CLEAR,
                 poll_interval_ms=10000,  # Poll more frequently to recover
