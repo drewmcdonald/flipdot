@@ -20,6 +20,7 @@ ruff = "^0.9.6"
 types-pyserial = "^3.5.0.20250130"
 watchfiles = "^1.0.4"
 pytest = "^8.4.2"
+basedpyright = "^1.32.1"
 
 [build-system]
 requires = ["poetry-core"]
@@ -48,3 +49,7 @@ lint.select = [
     "UP", # pyupgrade
 ]
 lint.ignore = []
+
+[tool.basedpyright]
+ignore = ['graveyard', 'tests']
+reportImplicitStringConcatenation = false

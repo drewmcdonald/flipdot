@@ -13,7 +13,9 @@ import logging
 import threading
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, final
+
+from typing_extensions import override
 
 from flipdot.driver.models import AuthConfig, Content
 
@@ -52,12 +54,14 @@ class PushRequestHandler(BaseHTTPRequestHandler):
 
         return False
 
-    def _send_json_response(self, status_code: int, data: dict) -> None:
+    def _send_json_response(
+        self, status_code: int, data: dict[str, str | int | float | bool]
+    ) -> None:
         """Send a JSON response."""
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        _ = self.wfile.write(json.dumps(data).encode())
 
     def do_POST(self) -> None:
         """Handle POST requests with content data."""
@@ -76,7 +80,8 @@ class PushRequestHandler(BaseHTTPRequestHandler):
             limits = self.limits if self.limits is not None else DEFAULT_LIMITS
             if content_length > limits.server.max_request_size:
                 logger.warning(
-                    f"Request too large: {content_length} bytes (max {limits.server.max_request_size})"
+                    f"Request too large: {content_length} bytes "
+                    + f"(max {limits.server.max_request_size})"
                 )
                 self._send_json_response(413, {"error": "Request too large"})
                 return
@@ -86,14 +91,13 @@ class PushRequestHandler(BaseHTTPRequestHandler):
                 return
 
             body = self.rfile.read(content_length).decode("utf-8")
-            data = json.loads(body)
 
             # Parse as Content
-            content = Content.model_validate(data)
+            content = Content.model_validate(json.loads(body))
 
             logger.info(
                 f"Received push content: {content.content_id} "
-                f"(priority={content.playback.priority})"
+                + f"(priority={content.playback.priority})"
             )
 
             # Call the callback
@@ -117,11 +121,15 @@ class PushRequestHandler(BaseHTTPRequestHandler):
         else:
             self._send_json_response(404, {"error": "Not found"})
 
-    def log_message(self, format: str, *args) -> None:
+    @override
+    def log_message(
+        self, format: str, *args: tuple[str | int | float | bool, ...]
+    ) -> None:
         """Override to use our logger instead of stderr."""
         logger.info(f"Push server: {format % args}")
 
 
+@final
 class PushServer:
     """HTTP server for receiving push notifications."""
 

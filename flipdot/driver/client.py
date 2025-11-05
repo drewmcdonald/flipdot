@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, final
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@final
 class ContentClient:
     """Client for fetching content from a remote server."""
 
@@ -76,10 +77,11 @@ class ContentClient:
             logger.debug(f"Fetching content from {self.endpoint}")
             start_time = time.time()
 
-            with urlopen(request, timeout=self.timeout) as response:
+            with urlopen(request, timeout=self.timeout) as response:  # pyright: ignore[reportAny]
                 elapsed = time.time() - start_time
-                data = response.read().decode("utf-8")
-                content_response = ContentResponse.model_validate_json(data)
+                content_response = ContentResponse.model_validate_json(
+                    response.read().decode("utf-8")  # pyright: ignore[reportAny]
+                )
 
                 # Update poll interval if server specified
                 self.poll_interval_ms = content_response.poll_interval_ms
@@ -179,6 +181,7 @@ class ContentClient:
         self.last_poll_time = time.time()
 
 
+@final
 class ErrorHandler:
     """Handles error scenarios based on fallback configuration."""
 

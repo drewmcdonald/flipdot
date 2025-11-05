@@ -7,9 +7,9 @@ Frames contain base64-encoded packed bit data for efficiency.
 
 import base64
 from enum import Enum
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, cast
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
 class Frame(BaseModel):
@@ -28,7 +28,7 @@ class Frame(BaseModel):
         description="How long to display this frame in milliseconds. "
         "None or 0 means display indefinitely.",
     )
-    metadata: dict | None = Field(
+    metadata: dict[str, object] | None = Field(
         default=None, description="Optional metadata for debugging"
     )
 
@@ -37,9 +37,9 @@ class Frame(BaseModel):
     def validate_base64(cls, v: str) -> str:
         """Validate that data_b64 is valid base64."""
         try:
-            base64.b64decode(v, validate=True)
+            _ = base64.b64decode(v, validate=True)
         except Exception as e:
-            raise ValueError(f"Invalid base64 data: {e}")
+            raise ValueError(f"Invalid base64 data: {e}") from e
         return v
 
     def decode_data(self) -> bytes:
@@ -52,11 +52,11 @@ class Frame(BaseModel):
         Returns a list of lists representing rows of pixels.
         """
         data = self.decode_data()
-        bits = []
+        bits: list[list[int]] = []
         bit_idx = 0
 
         for _ in range(self.height):
-            row = []
+            row: list[int] = []
             for _ in range(self.width):
                 byte_idx = bit_idx // 8
                 bit_pos = bit_idx % 8
@@ -92,10 +92,10 @@ class PlaybackMode(BaseModel):
 
     @field_validator("loop_count")
     @classmethod
-    def validate_loop_count(cls, v: int | None, info) -> int | None:
+    def validate_loop_count(cls, v: int | None, info: ValidationInfo) -> int | None:
         """Validate that loop_count requires loop=True."""
         if v is not None:
-            loop = info.data.get("loop", False)
+            loop = cast(bool, info.data.get("loop", False))
             if not loop:
                 raise ValueError("loop_count can only be set when loop=True")
         return v
@@ -109,7 +109,7 @@ class Content(BaseModel):
     playback: PlaybackMode = Field(
         default_factory=PlaybackMode, description="Playback configuration"
     )
-    metadata: dict | None = Field(
+    metadata: dict[str, object] | None = Field(
         default=None, description="Optional metadata for debugging"
     )
 
@@ -129,7 +129,8 @@ class Content(BaseModel):
         # Enforce frame count limit to prevent OOM
         if len(frames) > cls.MAX_FRAMES_PER_CONTENT:
             raise ValueError(
-                f"Too many frames: {len(frames)} exceeds limit of {cls.MAX_FRAMES_PER_CONTENT}"
+                f"Too many frames: {len(frames)} exceeds limit of "
+                f"{cls.MAX_FRAMES_PER_CONTENT}"
             )
 
         first_frame = frames[0]
@@ -154,21 +155,25 @@ class Content(BaseModel):
                 metadata_size = len(json.dumps(frame.metadata).encode("utf-8"))
                 if metadata_size > cls.MAX_METADATA_BYTES:
                     raise ValueError(
-                        f"Frame {i} metadata too large: {metadata_size} bytes exceeds limit of {cls.MAX_METADATA_BYTES}"
+                        f"Frame {i} metadata too large: {metadata_size} bytes "
+                        f"exceeds limit of {cls.MAX_METADATA_BYTES}"
                     )
                 total_bytes += metadata_size
 
         # Enforce total memory limit
         if total_bytes > cls.MAX_TOTAL_BYTES:
             raise ValueError(
-                f"Content too large: {total_bytes} bytes exceeds limit of {cls.MAX_TOTAL_BYTES}"
+                f"Content too large: {total_bytes} bytes exceeds limit of "
+                f"{cls.MAX_TOTAL_BYTES}"
             )
 
         return frames
 
     @field_validator("metadata")
     @classmethod
-    def validate_metadata_size(cls, v: dict | None) -> dict | None:
+    def validate_metadata_size(
+        cls, v: dict[str, object] | None
+    ) -> dict[str, object] | None:
         """Validate that metadata doesn't exceed size limit."""
         if v is None:
             return v
@@ -178,7 +183,8 @@ class Content(BaseModel):
         metadata_size = len(json.dumps(v).encode("utf-8"))
         if metadata_size > cls.MAX_METADATA_BYTES:
             raise ValueError(
-                f"Content metadata too large: {metadata_size} bytes exceeds limit of {cls.MAX_METADATA_BYTES}"
+                f"Content metadata too large: {metadata_size} bytes exceeds "
+                f"limit of {cls.MAX_METADATA_BYTES}"
             )
 
         return v
@@ -227,7 +233,9 @@ class ContentResponse(BaseModel):
 
     @field_validator("content")
     @classmethod
-    def validate_content(cls, v: Content | None, info) -> Content | None:
+    def validate_content(
+        cls, v: Content | None, info: ValidationInfo
+    ) -> Content | None:
         """Validate that content is present when status is updated."""
         status = info.data.get("status")
         if status == ResponseStatus.UPDATED and v is None:

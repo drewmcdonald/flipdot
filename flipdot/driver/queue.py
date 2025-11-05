@@ -24,11 +24,11 @@ class ContentState:
     """State for currently playing content."""
 
     def __init__(self, content: Content):
-        self.content = content
-        self.frame_index = 0
-        self.loop_count = 0
-        self.frame_start_time = time.time()
-        self.paused = False
+        self.content: Content = content
+        self.frame_index: int = 0
+        self.loop_count: int = 0
+        self.frame_start_time: float = time.time()
+        self.paused: bool = False
         self.paused_at: float | None = None
         self.time_paused: float = 0  # Total time spent paused
 
@@ -140,11 +140,12 @@ class ContentQueue:
         """
         from flipdot.driver.config import DEFAULT_LIMITS
 
-        self.limits = limits if limits is not None else DEFAULT_LIMITS
+        self.limits: DriverLimits = limits if limits is not None else DEFAULT_LIMITS
         self.current: ContentState | None = None
         self.queue: list[ContentState] = []  # Sorted by priority (highest first)
         self.interrupted: list[ContentState] = []  # Stack of interrupted content
-        self._lock = threading.RLock()  # Reentrant lock for thread safety
+        # Reentrant lock for thread safety
+        self._lock: threading.RLock = threading.RLock()
 
     def add_content(self, content: Content) -> None:
         """
@@ -177,8 +178,8 @@ class ContentQueue:
                 if self.current.content.playback.interruptible:
                     logger.info(
                         f"Interrupting {self.current.content.content_id} "
-                        f"(priority {current_priority}) with {content.content_id} "
-                        f"(priority {priority})"
+                        + f"(priority {current_priority}) with {content.content_id} "
+                        + f"(priority {priority})"
                     )
                     self.current.pause()
                     self.interrupted.append(self.current)
@@ -187,14 +188,15 @@ class ContentQueue:
                     if len(self.interrupted) > self.limits.queue.max_interrupted_items:
                         dropped = self.interrupted.pop(0)
                         logger.warning(
-                            f"Interrupted stack overflow: dropped {dropped.content.content_id}"
+                            "Interrupted stack overflow: dropped "
+                            + f"{dropped.content.content_id}"
                         )
 
                     self.current = new_state
                 else:
                     logger.warning(
                         f"Cannot interrupt {self.current.content.content_id} "
-                        f"(marked as non-interruptible)"
+                        + "(marked as non-interruptible)"
                     )
                     self._add_to_queue(new_state)
             else:
@@ -224,12 +226,12 @@ class ContentQueue:
             dropped = self.queue.pop()
             logger.warning(
                 f"Queue overflow: dropped {dropped.content.content_id} "
-                f"(priority {dropped.content.playback.priority})"
+                + f"(priority {dropped.content.playback.priority})"
             )
 
         logger.info(
             f"Added {state.content.content_id} to queue at position {insert_idx} "
-            f"({len(self.queue)} items)"
+            + f"({len(self.queue)} items)"
         )
 
     def update(self) -> Frame | None:
@@ -252,7 +254,7 @@ class ContentQueue:
             if self.current.advance_frame():
                 logger.debug(
                     f"Advanced to frame {self.current.frame_index} "
-                    f"of {self.current.content.content_id}"
+                    + f"of {self.current.content.content_id}"
                 )
 
             # Check if current content is complete

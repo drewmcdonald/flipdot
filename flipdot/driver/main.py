@@ -15,7 +15,8 @@ import signal
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from types import FrameType
+from typing import TYPE_CHECKING, cast, final
 
 from flipdot.driver.client import ContentClient, ErrorHandler
 from flipdot.driver.hardware import Panel, SerialConnection
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@final
 class FlipDotDriver:
     """Main driver class that orchestrates all components."""
 
@@ -51,8 +53,11 @@ class FlipDotDriver:
         self.running = False
 
         # Set up logging
+        log_level: int | None = getattr(logging, config.log_level.upper(), None)
+        if log_level is None:
+            log_level = logging.INFO
         logging.basicConfig(
-            level=getattr(logging, config.log_level.upper()),
+            level=log_level,
             format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         )
 
@@ -269,7 +274,7 @@ def load_config(config_path: str) -> DriverConfig:
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
     with open(path) as f:
-        data = json.load(f)
+        data = cast(dict[str, object], json.load(f))
 
     return DriverConfig.model_validate(data)
 
@@ -279,27 +284,27 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="FlipDot Display Driver")
-    parser.add_argument(
+    _ = parser.add_argument(
         "--config",
         type=str,
         required=True,
         help="Path to configuration JSON file",
     )
 
-    args = parser.parse_args()
+    args: argparse.Namespace = parser.parse_args()
 
     try:
-        config = load_config(args.config)
+        config = load_config(cast(str, args.config))
         driver = FlipDotDriver(config)
 
         # Handle SIGTERM gracefully
-        def signal_handler(sig, frame):
+        def signal_handler(sig: int, _frame: FrameType | None) -> None:
             logger.info(f"Received signal {sig}")
             driver.stop()
             sys.exit(0)
 
-        signal.signal(signal.SIGTERM, signal_handler)
-        signal.signal(signal.SIGINT, signal_handler)
+        _ = signal.signal(signal.SIGTERM, signal_handler)
+        _ = signal.signal(signal.SIGINT, signal_handler)
 
         driver.start()
 

@@ -10,7 +10,7 @@ Adapted from https://github.com/chrishemmings/flipPyDot
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, final
 
 if TYPE_CHECKING:
     from flipdot.driver.config import DriverLimits
@@ -19,8 +19,11 @@ logger = logging.getLogger(__name__)
 
 try:
     import serial
+
+    SerialException: type[BaseException] = serial.SerialException  # type: ignore[assignment]
 except ImportError:
     serial = None  # type: ignore
+    SerialException = OSError
 
 # Serial protocol constants
 START_BYTES_FLUSH = bytes([0x80, 0x83])
@@ -48,6 +51,7 @@ def pack_bits_little_endian(bits: list[int]) -> bytes:
     return bytes(result)
 
 
+@final
 class FlippyModule:
     """
     A single flipdot module (typically 28x7 pixels).
@@ -79,10 +83,11 @@ class FlippyModule:
         """
         if len(content) != self.height:
             raise ValueError(
-                f"Content height {len(content)} doesn't match module height {self.height}"
+                f"Content height {len(content)} doesn't match module height "
+                f"{self.height}"
             )
 
-        flat_content = []
+        flat_content: list[int] = []
         for row in content:
             if len(row) != self.width:
                 raise ValueError(
@@ -99,7 +104,7 @@ class FlippyModule:
         Returns:
             2D list of bits, shape [height, width]
         """
-        result = []
+        result: list[list[int]] = []
         for i in range(self.height):
             start = i * self.width
             end = start + self.width
@@ -122,6 +127,7 @@ class FlippyModule:
         return start_bytes + bytes([self.address]) + packed_bits + END_BYTES
 
 
+@final
 class Panel:
     """
     A panel composed of multiple flipdot modules.
@@ -141,7 +147,8 @@ class Panel:
 
         Args:
             layout: 2D list defining module arrangement with module addresses.
-                   Example: [[1], [2]] = 2 modules stacked vertically with addresses 1 and 2
+                   Example: [[1], [2]] = 2 modules stacked vertically with
+                   addresses 1 and 2
             module_width: Width of each module in pixels
             module_height: Height of each module in pixels
         """
@@ -183,14 +190,14 @@ class Panel:
         Returns:
             2D list of bits, shape [total_height, total_width]
         """
-        result = []
+        result: list[list[int]] = []
         for module_row in self.modules:
             # Get content from each module in the row
             module_contents = [module.get_content() for module in module_row]
 
             # Concatenate horizontally (each row of each module)
             for row_idx in range(self.module_height):
-                combined_row = []
+                combined_row: list[int] = []
                 for module_content in module_contents:
                     combined_row.extend(module_content[row_idx])
                 result.append(combined_row)
@@ -209,13 +216,15 @@ class Panel:
         """
         if len(matrix_data) != self.total_height:
             raise ValueError(
-                f"Matrix height {len(matrix_data)} doesn't match panel height {self.total_height}"
+                f"Matrix height {len(matrix_data)} doesn't match panel height "
+                f"{self.total_height}"
             )
 
         for row in matrix_data:
             if len(row) != self.total_width:
                 raise ValueError(
-                    f"Matrix width {len(row)} doesn't match panel width {self.total_width}"
+                    f"Matrix width {len(row)} doesn't match panel width "
+                    f"{self.total_width}"
                 )
 
         # Split matrix into module-sized chunks
@@ -229,7 +238,7 @@ class Panel:
                 col_end = col_start + self.module_width
 
                 # Extract this module's data
-                module_data = []
+                module_data: list[list[int]] = []
                 for row in row_data:
                     module_data.append(row[col_start:col_end])
 
@@ -264,16 +273,16 @@ class Panel:
             )
 
         # Unpack bits
-        bits = []
+        bits: list[int] = []
         for byte in frame_data:
             for bit_pos in range(8):
                 bits.append((byte >> bit_pos) & 1)
 
         # Convert to 2D array
-        matrix_data = []
+        matrix_data: list[list[int]] = []
         bit_idx = 0
         for _ in range(height):
-            row = []
+            row: list[int] = []
             for _ in range(width):
                 if bit_idx < len(bits):
                     row.append(bits[bit_idx])
@@ -285,6 +294,7 @@ class Panel:
         return self.set_content(matrix_data)
 
 
+@final
 class SerialConnection:
     """Wrapper for serial connection with optional dev mode and reconnection."""
 
@@ -318,7 +328,7 @@ class SerialConnection:
         if not dev_mode and device:
             if serial is None:
                 raise ImportError("pyserial is required for serial communication")
-            self._connect()
+            _ = self._connect()
 
     def _connect(self) -> bool:
         """
@@ -328,6 +338,8 @@ class SerialConnection:
             True if connection successful, False otherwise
         """
         try:
+            if serial is None:
+                raise ImportError("pyserial is required for serial communication")
             self._serial = serial.Serial(self.device, self.baudrate, timeout=1)
             self.consecutive_failures = 0
             self.reconnect_backoff_ms = self.limits.serial.initial_reconnect_backoff_ms
@@ -364,7 +376,8 @@ class SerialConnection:
 
         self.last_reconnect_attempt = time.time()
         logger.info(
-            f"Attempting serial reconnection (failure count: {self.consecutive_failures})"
+            f"Attempting serial reconnection "
+            f"(failure count: {self.consecutive_failures})"
         )
 
         success = self._connect()
@@ -411,12 +424,17 @@ class SerialConnection:
                 return False
 
         try:
+            if self._serial is None:
+                self.consecutive_failures += 1
+                logger.error("Serial connection is not available")
+                return False
+
             bytes_written = self._serial.write(data)
             if bytes_written != len(data):
                 self.consecutive_failures += 1
                 logger.error(
-                    f"Serial write incomplete: wrote {bytes_written}/{len(data)} bytes. "
-                    "Device buffer may be full or connection unstable."
+                    f"Serial write incomplete: wrote {bytes_written}/{len(data)} "
+                    "bytes. Device buffer may be full or connection unstable."
                 )
                 return False
 
@@ -427,11 +445,12 @@ class SerialConnection:
             logger.debug(f"Successfully wrote {bytes_written} bytes to serial")
             return True
 
-        except (OSError, getattr(serial, "SerialException", Exception)) as e:
+        except (OSError, SerialException) as e:
             self.consecutive_failures += 1
             logger.error(
-                f"Serial write failed: {e}. "
-                f"Device may be disconnected (failure {self.consecutive_failures}/{self.limits.serial.max_consecutive_failures})."
+                f"Serial write failed: {e}. Device may be disconnected "
+                f"(failure {self.consecutive_failures}/"
+                f"{self.limits.serial.max_consecutive_failures})."
             )
             # Close and mark for reconnection
             if self._serial:
@@ -442,7 +461,7 @@ class SerialConnection:
                 self._serial = None
             return False
 
-        except Exception as e:
+        except BaseException as e:
             self.consecutive_failures += 1
             logger.error(f"Unexpected error writing to serial: {e}", exc_info=True)
             return False

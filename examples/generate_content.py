@@ -102,7 +102,7 @@ def example_animation():
     # Create 10 frames of a vertical bar moving across the screen
     for i in range(10):
         pattern = []
-        for y in range(height):
+        for _ in range(height):
             row = []
             for x in range(width):
                 # Bar is 4 pixels wide, moves 5 pixels per frame

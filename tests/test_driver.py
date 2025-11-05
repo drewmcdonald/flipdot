@@ -4,6 +4,7 @@ Comprehensive tests for the flipdot driver implementation.
 
 import base64
 import time
+from email.message import Message
 from unittest.mock import Mock, patch
 from urllib.error import HTTPError, URLError
 
@@ -32,6 +33,8 @@ from flipdot.driver.server import PushServer
 # =============================================================================
 # Test Utilities
 # =============================================================================
+
+dummy_message = Message()
 
 
 def create_test_frame(
@@ -230,7 +233,10 @@ class TestFrame:
         bits = [1, 0] * 4
         packed = pack_bits_little_endian(bits)
         b64 = base64.b64encode(packed).decode()
-        metadata = {"frame_id": "test-123", "timestamp": "2024-01-01"}
+        metadata: dict[str, object] = {
+            "frame_id": "test-123",
+            "timestamp": "2024-01-01",
+        }
         frame = Frame(data_b64=b64, width=2, height=2, metadata=metadata)
 
         assert frame.metadata == metadata
@@ -383,6 +389,7 @@ class TestContentResponse:
         json_str = response.model_dump_json()
         parsed = ContentResponse.model_validate_json(json_str)
         assert parsed.status == response.status
+        assert parsed.content is not None
         assert parsed.content.content_id == content.content_id
 
 
@@ -935,6 +942,7 @@ class TestContentQueue:
         )
         queue.add_content(content)
 
+        assert queue.current is not None
         initial_idx = queue.current.frame_index
         time.sleep(0.02)
         queue.update()
@@ -954,6 +962,7 @@ class TestContentQueue:
         replaced = queue.replace_if_same_id(content2)
 
         assert replaced is True
+        assert queue.current is not None
         assert len(queue.current.content.frames) == 2
 
     def test_queue_replace_not_found(self):
@@ -1062,8 +1071,13 @@ class TestContentClient:
     @patch("flipdot.driver.client.urlopen")
     def test_client_fetch_http_error(self, mock_urlopen):
         """Test handling HTTP errors."""
+
         mock_urlopen.side_effect = HTTPError(
-            "http://example.com", 404, "Not Found", {}, None
+            "http://example.com",
+            404,
+            "Not Found",
+            dummy_message,
+            None,
         )
 
         auth = AuthConfig()
@@ -1078,7 +1092,7 @@ class TestContentClient:
     def test_client_fetch_auth_error(self, mock_urlopen):
         """Test handling authentication errors."""
         mock_urlopen.side_effect = HTTPError(
-            "http://example.com", 401, "Unauthorized", {}, None
+            "http://example.com", 401, "Unauthorized", dummy_message, None
         )
 
         auth = AuthConfig()
@@ -1152,6 +1166,7 @@ class TestErrorHandler:
 
         fallback = handler.get_fallback_response()
         assert fallback is not None
+        assert fallback.content is not None
         assert fallback.content.content_id == content.content_id
 
     def test_handler_blank(self):
@@ -1341,7 +1356,6 @@ class TestIntegration:
         # Advance a few frames
         time.sleep(0.06)
         queue.update()
-        base_frame_idx = queue.current.frame_index
 
         # Interrupt with notification
         notif_frame = create_test_frame(duration_ms=20)
