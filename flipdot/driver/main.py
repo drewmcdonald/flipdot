@@ -13,13 +13,11 @@ import signal
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 from flipdot.driver.client import ContentClient, ErrorHandler
 from flipdot.driver.hardware import Panel, SerialConnection
 from flipdot.driver.models import (
     Content,
-    ContentResponse,
     DriverConfig,
     ResponseStatus,
 )
@@ -73,7 +71,7 @@ class FlipDotDriver:
         self.error_handler = ErrorHandler(fallback=config.error_fallback)
 
         # Initialize push server if enabled
-        self.push_server: Optional[PushServer] = None
+        self.push_server: PushServer | None = None
         if config.enable_push:
             self.push_server = PushServer(
                 host=config.push_host,
@@ -133,6 +131,45 @@ class FlipDotDriver:
         serial_data = self.panel.set_content(blank)
         self.serial.write(serial_data)
 
+    def _calculate_next_sleep_ms(self) -> float:
+        """
+        Calculate the optimal sleep duration for the main loop.
+
+        Returns the minimum of:
+        - Time until next frame should advance
+        - Time until next poll should occur
+
+        Returns:
+            Sleep time in milliseconds, capped at 10ms minimum to prevent
+            busy-waiting when neither frame nor poll is due soon.
+        """
+        MIN_SLEEP_MS = 10
+        MAX_SLEEP_MS = 10000  # 10 seconds
+
+        # Get time until next poll
+        next_poll_ms = self.client.get_next_poll_delay_ms()
+
+        # Get time until next frame advance
+        next_frame_ms = MAX_SLEEP_MS
+        if self.queue.has_content():
+            current_state = self.queue.current
+            if current_state and not current_state.paused:
+                current_frame = current_state.current_frame
+                if current_frame.duration_ms and current_frame.duration_ms > 0:
+                    elapsed_ms = (
+                        time.time()
+                        - current_state.frame_start_time
+                        - current_state.time_paused
+                    ) * 1000
+                    remaining_ms = current_frame.duration_ms - elapsed_ms
+                    next_frame_ms = max(0, remaining_ms)
+
+        # Sleep for the minimum of the two, but at least MIN_SLEEP_MS
+        sleep_ms = min(next_poll_ms, next_frame_ms)
+        sleep_ms = max(MIN_SLEEP_MS, min(sleep_ms, MAX_SLEEP_MS))
+
+        return sleep_ms / 1000.0  # Convert to seconds
+
     def _render_frame(self) -> None:
         """Render the current frame to the display."""
         frame = self.queue.update()
@@ -180,9 +217,10 @@ class FlipDotDriver:
                 # Render current frame
                 self._render_frame()
 
-                # Small sleep to prevent busy-waiting
-                # The actual frame timing is handled by the queue
-                time.sleep(0.01)  # 10ms
+                # Sleep until the next event (frame change or poll time)
+                # This prevents busy-waiting and reduces CPU usage
+                sleep_seconds = self._calculate_next_sleep_ms()
+                time.sleep(sleep_seconds)
 
         except KeyboardInterrupt:
             logger.info("Received interrupt signal")
