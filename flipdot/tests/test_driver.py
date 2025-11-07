@@ -10,14 +10,14 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
-from flipdot.driver.client import ContentClient, ErrorHandler
-from flipdot.driver.hardware import (
+from flipdot.client import ContentClient, ErrorHandler
+from flipdot.hardware import (
     FlippyModule,
     Panel,
     SerialConnection,
     pack_bits_little_endian,
 )
-from flipdot.driver.models import (
+from flipdot.models import (
     AuthConfig,
     Content,
     ContentResponse,
@@ -27,8 +27,8 @@ from flipdot.driver.models import (
     PlaybackMode,
     ResponseStatus,
 )
-from flipdot.driver.queue import ContentQueue, ContentState
-from flipdot.driver.server import PushServer
+from flipdot.queue import ContentQueue, ContentState
+from flipdot.server import PushServer
 
 # =============================================================================
 # Test Utilities
@@ -641,7 +641,7 @@ class TestSerialConnection:
         conn.write(b"test")  # Should not crash
         conn.close()
 
-    @patch("flipdot.driver.hardware.serial.Serial")
+    @patch("flipdot.hardware.serial.Serial")
     def test_serial_with_device(self, mock_serial_class):
         """Test serial with device."""
         mock_serial = Mock()
@@ -652,7 +652,7 @@ class TestSerialConnection:
         mock_serial_class.assert_called_once_with("/dev/ttyUSB0", 57600, timeout=1)
         assert conn._serial == mock_serial
 
-    @patch("flipdot.driver.hardware.serial.Serial")
+    @patch("flipdot.hardware.serial.Serial")
     def test_serial_write(self, mock_serial_class):
         """Test writing to serial."""
         mock_serial = Mock()
@@ -663,7 +663,7 @@ class TestSerialConnection:
 
         mock_serial.write.assert_called_once_with(b"test data")
 
-    @patch("flipdot.driver.hardware.serial.Serial")
+    @patch("flipdot.hardware.serial.Serial")
     def test_serial_close(self, mock_serial_class):
         """Test closing serial connection."""
         mock_serial = Mock()
@@ -1045,7 +1045,7 @@ class TestContentClient:
         delay = client.get_next_poll_delay_ms()
         assert 0 <= delay <= 1000
 
-    @patch("flipdot.driver.client.urlopen")
+    @patch("flipdot.client.urlopen")
     def test_client_fetch_success(self, mock_urlopen):
         """Test successful content fetch."""
         content = create_test_content()
@@ -1068,7 +1068,7 @@ class TestContentClient:
         assert result.status == ResponseStatus.UPDATED
         assert client.consecutive_errors == 0
 
-    @patch("flipdot.driver.client.urlopen")
+    @patch("flipdot.client.urlopen")
     def test_client_fetch_http_error(self, mock_urlopen):
         """Test handling HTTP errors."""
 
@@ -1088,7 +1088,7 @@ class TestContentClient:
         assert result is None
         assert client.consecutive_errors == 1
 
-    @patch("flipdot.driver.client.urlopen")
+    @patch("flipdot.client.urlopen")
     def test_client_fetch_auth_error(self, mock_urlopen):
         """Test handling authentication errors."""
         mock_urlopen.side_effect = HTTPError(
@@ -1103,7 +1103,7 @@ class TestContentClient:
         assert result is None
         assert client.consecutive_errors == 1
 
-    @patch("flipdot.driver.client.urlopen")
+    @patch("flipdot.client.urlopen")
     def test_client_fetch_network_error(self, mock_urlopen):
         """Test handling network errors."""
         mock_urlopen.side_effect = URLError("Network unreachable")
@@ -1116,7 +1116,7 @@ class TestContentClient:
         assert result is None
         assert client.consecutive_errors == 1
 
-    @patch("flipdot.driver.client.urlopen")
+    @patch("flipdot.client.urlopen")
     def test_client_fetch_invalid_json(self, mock_urlopen):
         """Test handling invalid JSON response."""
         mock_response = Mock()

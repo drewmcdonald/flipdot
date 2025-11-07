@@ -17,10 +17,10 @@ from typing import TYPE_CHECKING, final
 
 from typing_extensions import override
 
-from flipdot.driver.models import AuthConfig, Content
+from flipdot.models import AuthConfig, Content
 
 if TYPE_CHECKING:
-    from flipdot.driver.config import DriverLimits
+    from flipdot.config import DriverLimits
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class PushRequestHandler(BaseHTTPRequestHandler):
 
         # Read body with size limit
         try:
-            from flipdot.driver.config import DEFAULT_LIMITS
+            from flipdot.config import DEFAULT_LIMITS
 
             content_length = int(self.headers.get("Content-Length", 0))
 
@@ -151,7 +151,7 @@ class PushServer:
             content_callback: Function to call when content is received
             limits: Driver limits configuration
         """
-        from flipdot.driver.config import DEFAULT_LIMITS
+        from flipdot.config import DEFAULT_LIMITS
 
         self.host = host
         self.port = port

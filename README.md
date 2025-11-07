@@ -252,7 +252,7 @@ Example flow:
 See `examples/generate_content.py` for examples of creating frames:
 
 ```python
-from flipdot.driver.hardware import pack_bits_little_endian
+from flipdot.hardware import pack_bits_little_endian
 import base64
 
 # Create a 2x2 frame

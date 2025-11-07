@@ -13,10 +13,10 @@ from typing import TYPE_CHECKING, final
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from flipdot.driver.models import AuthConfig, ContentResponse, ErrorFallback
+from flipdot.models import AuthConfig, ContentResponse, ErrorFallback
 
 if TYPE_CHECKING:
-    from flipdot.driver.config import DriverLimits
+    from flipdot.config import DriverLimits
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class ContentClient:
             auth: Authentication configuration
             limits: Driver limits configuration (uses DEFAULT_LIMITS if None)
         """
-        from flipdot.driver.config import DEFAULT_LIMITS
+        from flipdot.config import DEFAULT_LIMITS
 
         self.endpoint = endpoint
         self.auth = auth
@@ -220,7 +220,7 @@ class ErrorHandler:
 
         elif self.fallback == ErrorFallback.BLANK:
             logger.info("Fallback: clearing display")
-            from flipdot.driver.models import ResponseStatus
+            from flipdot.models import ResponseStatus
 
             return ContentResponse(
                 status=ResponseStatus.CLEAR,
@@ -230,7 +230,7 @@ class ErrorHandler:
         elif self.fallback == ErrorFallback.ERROR_MESSAGE:
             # For now, just clear. In the future, could generate an error message frame
             logger.info("Fallback: showing error state")
-            from flipdot.driver.models import ResponseStatus
+            from flipdot.models import ResponseStatus
 
             return ContentResponse(
                 status=ResponseStatus.CLEAR,

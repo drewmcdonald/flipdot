@@ -13,20 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Setup and build frontend
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Install frontend dependencies
-        run: bun install
-        working-directory: frontend
-
-      - name: Build frontend
-        run: bun run build
-        working-directory: frontend
-
       # Setup Python environment
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -39,30 +25,23 @@ jobs:
       - name: Install dependencies
         run: poetry install
 
-      # Run codegen to ensure it's up to date
-      - name: Check for changes
-        run: |
-          poetry run python scripts/codegen.py
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "Error: Codegen produced changes."
-            git status
-            git diff
-            exit 1
-          fi
       # Create distribution
-      - name: Create dist directory
+      - name: Create distribution
         run: |
           mkdir -p dist
           cp README.md dist/
           cp LICENSE dist/
           cp -r flipdot dist/
-          cp server.py dist/
           cp pyproject.toml dist/
           cp poetry.lock dist/
-          cp -r frontend/dist dist/frontend
+          cp flipdot.service dist/
+          cp install-rpi.sh dist/
+
+          # Ensure install script is executable
+          chmod +x dist/install-rpi.sh
 
       - name: Create archive
-        run: tar -czf release.tar.gz dist/
+        run: tar -czf flipdot.tar.gz dist/
 
       - name: Create Release
         env:
@@ -71,4 +50,4 @@ jobs:
           gh release create ${{ github.ref_name }} \
             --title "Release ${{ github.ref_name }}" \
             --generate-notes \
-            release.tar.gz
+            flipdot.tar.gz

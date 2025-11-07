@@ -18,18 +18,18 @@ from pathlib import Path
 from types import FrameType
 from typing import TYPE_CHECKING, cast, final
 
-from flipdot.driver.client import ContentClient, ErrorHandler
-from flipdot.driver.hardware import Panel, SerialConnection
-from flipdot.driver.models import (
+from flipdot.client import ContentClient, ErrorHandler
+from flipdot.hardware import Panel, SerialConnection
+from flipdot.models import (
     Content,
     DriverConfig,
     ResponseStatus,
 )
-from flipdot.driver.queue import ContentQueue
-from flipdot.driver.server import PushServer
+from flipdot.queue import ContentQueue
+from flipdot.server import PushServer
 
 if TYPE_CHECKING:
-    from flipdot.driver.config import DriverLimits
+    from flipdot.config import DriverLimits
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class FlipDotDriver:
             config: Driver configuration
             limits: Driver limits configuration
         """
-        from flipdot.driver.config import DEFAULT_LIMITS
+        from flipdot.config import DEFAULT_LIMITS
 
         self.config = config
         self.limits = limits if limits is not None else DEFAULT_LIMITS

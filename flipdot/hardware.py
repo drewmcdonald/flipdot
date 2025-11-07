@@ -13,7 +13,7 @@ import logging
 from typing import TYPE_CHECKING, final
 
 if TYPE_CHECKING:
-    from flipdot.driver.config import DriverLimits
+    from flipdot.config import DriverLimits
 
 logger = logging.getLogger(__name__)
 
@@ -314,7 +314,7 @@ class SerialConnection:
             dev_mode: If True, print to console instead of serial
             limits: Driver limits configuration (uses DEFAULT_LIMITS if None)
         """
-        from flipdot.driver.config import DEFAULT_LIMITS
+        from flipdot.config import DEFAULT_LIMITS
 
         self.dev_mode = dev_mode
         self.device = device
