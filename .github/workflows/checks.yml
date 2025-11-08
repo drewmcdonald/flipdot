@@ -20,6 +20,24 @@ jobs:
       - name: Install dependencies
         run: poetry install --with dev
       - name: Run basedpyright
-        run: poetry run basedbyright flipdot
+        run: poetry run basedpyright flipdot
       - name: Run ruff
         run: poetry run ruff check flipdot
+
+  deno-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      - name: Run deno check
+        working-directory: val-server
+        run: deno check --all --allow-import **/*.ts **/*.tsx
+      - name: Run deno lint
+        working-directory: val-server
+        run: deno lint
+      - name: Run deno fmt check
+        working-directory: val-server
+        run: deno fmt --check
