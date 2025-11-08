@@ -18,26 +18,8 @@ jobs:
       - name: Install Poetry
         uses: snok/install-poetry@v1
       - name: Install dependencies
-        run: poetry install
-      - name: Run mypy
-        run: poetry run mypy flipdot server.py
+        run: poetry install --with dev
+      - name: Run basedpyright
+        run: poetry run basedpyright flipdot
       - name: Run ruff
-        run: poetry run ruff check .
-
-  frontend-checks:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-      - name: Install dependencies
-        run: bun install
-      - name: Type check
-        run: bun run tsc -b
-      - name: Lint
-        run: bun run lint
+        run: poetry run ruff check flipdot

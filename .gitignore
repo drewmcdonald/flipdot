@@ -39,4 +39,8 @@ ENV/
 Thumbs.db
 
 # Project specific
-*.log 
+*.log
+graveyard/
+.mypy_cache/
+.pytest_cache/
+.local-storage
