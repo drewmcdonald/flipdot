@@ -3,7 +3,7 @@
 # FlipDot Driver Installation Script for Raspberry Pi
 # This script downloads, installs, and sets up the FlipDot driver to run on startup
 #
-# Usage: bash <(curl -fsSL https://raw.githubusercontent.com/drewmcdonald/flipdot/main/install-rpi.sh)
+# Usage: bash <(curl -fsSL https://raw.githubusercontent.com/drewmcdonald/flipdot/main/flipdot/install-rpi.sh)
 #
 # Or locally: bash install-rpi.sh
 

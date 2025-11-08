@@ -3,7 +3,7 @@
 ## Installation (One Command)
 
 ```bash
-sudo bash <(curl -fsSL https://raw.githubusercontent.com/drewmcdonald/flipdot/main/install-rpi.sh)
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/drewmcdonald/flipdot/main/flipdot/install-rpi.sh)
 ```
 
 Then edit config:

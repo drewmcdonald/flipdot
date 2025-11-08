@@ -5,7 +5,7 @@ Complete automated setup for running the FlipDot driver on a Raspberry Pi with a
 ## Quick Start (One Command)
 
 ```bash
-sudo bash <(curl -fsSL https://raw.githubusercontent.com/drewmcdonald/flipdot/main/install-rpi.sh)
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/drewmcdonald/flipdot/main/flipdot/install-rpi.sh)
 ```
 
 Or if you have the script locally:
