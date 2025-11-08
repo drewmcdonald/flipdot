@@ -1,5 +1,3 @@
-#!/usr/bin/bash
-
 # FlipDot Driver Installation Script for Raspberry Pi
 # This script downloads, installs, and sets up the FlipDot driver to run on startup
 #
