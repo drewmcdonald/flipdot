@@ -23,19 +23,19 @@ RELEASE_URL="https://api.github.com/repos/${GITHUB_REPO}/releases"
 
 # Functions
 log_info() {
-    echo -e "${BLUE}ℹ${NC} $1"
+    echo -e "${BLUE}ℹ${NC} $1" >&2
 }
 
 log_success() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo -e "${GREEN}✓${NC} $1" >&2
 }
 
 log_warn() {
-    echo -e "${YELLOW}⚠${NC} $1"
+    echo -e "${YELLOW}⚠${NC} $1" >&2
 }
 
 log_error() {
-    echo -e "${RED}✗${NC} $1"
+    echo -e "${RED}✗${NC} $1" >&2
 }
 
 check_root() {
@@ -150,11 +150,7 @@ download_release() {
     local download_url="$1"
     local temp_dir=$(mktemp -d)
 
-    # Debug: print URL details
-    log_info "Download URL: $download_url"
-    log_info "URL length: ${#download_url}"
-
-    if wget -q -O "$temp_dir/flipdot.tar.gz" "$download_url" 2>/dev/null || curl -fsSL -o "$temp_dir/flipdot.tar.gz" "$download_url"; then
+    if curl -fsSL -o "$temp_dir/flipdot.tar.gz" "$download_url"; then
         log_success "Download completed"
 
         # Extract to temporary location first
@@ -287,8 +283,8 @@ GITHUB_REPO="drewmcdonald/flipdot"
 RELEASE_URL="https://api.github.com/repos/${GITHUB_REPO}/releases"
 VERSION_FILE="$FLIPDOT_HOME/.installed_version"
 
-log_info() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] INFO: $1"; }
-log_warn() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] WARN: $1"; }
+log_info() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] INFO: $1" >&2; }
+log_warn() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] WARN: $1" >&2; }
 log_error() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] ERROR: $1" >&2; }
 
 # Get installed version
