@@ -150,7 +150,11 @@ download_release() {
     local download_url="$1"
     local temp_dir=$(mktemp -d)
 
-    if curl -fsSL "$download_url" -o "$temp_dir/flipdot.tar.gz"; then
+    # Debug: print URL details
+    log_info "Download URL: $download_url"
+    log_info "URL length: ${#download_url}"
+
+    if wget -q -O "$temp_dir/flipdot.tar.gz" "$download_url" 2>/dev/null || curl -fsSL -o "$temp_dir/flipdot.tar.gz" "$download_url"; then
         log_success "Download completed"
 
         # Extract to temporary location first
@@ -326,7 +330,7 @@ if [ "$FLIPDOT_AUTO_UPDATE" = "true" ]; then
         exit 1
     fi
 
-    if curl -fsSL "$DOWNLOAD_URL" -o "$TEMP_DIR/flipdot.tar.gz"; then
+    if curl -fsSL -o "$TEMP_DIR/flipdot.tar.gz" "$DOWNLOAD_URL"; then
         tar -xzf "$TEMP_DIR/flipdot.tar.gz" -C "$TEMP_DIR"
 
         # Backup current version
