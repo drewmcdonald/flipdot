@@ -43,3 +43,4 @@ Thumbs.db
 graveyard/
 .mypy_cache/
 .pytest_cache/
+.local-storage

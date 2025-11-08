@@ -16,7 +16,7 @@ This server implements the **FlipDot Content Server API v2.0** specified in [CON
 
 ### Display Specifications
 
-- **Dimensions:** 56×14 pixels (two 28×7 flipdot modules)
+- **Dimensions:** 28×14 pixels (two 28×7 flipdot modules stacked vertically)
 - **Module Layout:** `[[1], [2]]` (stacked vertically)
 - **Pixel Format:** Binary (on/off), packed little-endian, base64-encoded
 - **Update Method:** Polling (driver polls every 30s by default)
@@ -203,7 +203,7 @@ return Response.json({
 });
 
 // Static test frame (all pixels on)
-const bits = new Array(56 * 14).fill(1);
+const bits = new Array(28 * 14).fill(1);
 return Response.json({
   status: "updated",
   content: {
@@ -211,7 +211,7 @@ return Response.json({
     frames: [
       {
         data_b64: bitsToBase64(bits),
-        width: 56,
+        width: 28,
         height: 14,
         duration_ms: null,
       },
@@ -227,8 +227,8 @@ return Response.json({
 
 **Validation:**
 
-- All frames must be 56×14 pixels
-- Base64 must decode to at least `ceil(56 * 14 / 8) = 98` bytes
+- All frames must be 28×14 pixels
+- Base64 must decode to at least `ceil(28 * 14 / 8) = 49` bytes
 - `poll_interval_ms` must be >= 1000
 - `content` required when `status="updated"`
 
@@ -301,7 +301,7 @@ export interface ContentResponse {
 
 **❌ Don't:**
 
-- Return content with dimensions other than 56×14
+- Return content with dimensions other than 28×14
 - Use big-endian bit packing (must be little-endian)
 - Forget to base64 encode the packed bits
 - Return `poll_interval_ms` < 1000
