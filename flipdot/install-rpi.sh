@@ -162,10 +162,10 @@ download_release() {
             cp "$FLIPDOT_HOME/config.json" "$temp_dir/config.json.bak"
         fi
 
-        # Copy application files
-        cp -r "$temp_dir/flipdot" "$FLIPDOT_HOME/"
-        cp -r "$temp_dir/README.md" "$FLIPDOT_HOME/" 2>/dev/null || true
-        cp -r "$temp_dir/LICENSE" "$FLIPDOT_HOME/" 2>/dev/null || true
+        # Copy application files (they're in dist/ subdirectory)
+        cp -r "$temp_dir/dist/flipdot" "$FLIPDOT_HOME/"
+        cp -r "$temp_dir/dist/README.md" "$FLIPDOT_HOME/" 2>/dev/null || true
+        cp -r "$temp_dir/dist/LICENSE" "$FLIPDOT_HOME/" 2>/dev/null || true
 
         # Restore config if it was backed up
         if [ -f "$temp_dir/config.json.bak" ]; then
@@ -334,9 +334,9 @@ if [ "$FLIPDOT_AUTO_UPDATE" = "true" ]; then
             cp -r "$FLIPDOT_HOME/flipdot" "$FLIPDOT_HOME/flipdot.backup"
         fi
 
-        # Install new version
-        cp -r "$TEMP_DIR/flipdot" "$FLIPDOT_HOME/"
-        cp "$TEMP_DIR/README.md" "$FLIPDOT_HOME/" 2>/dev/null || true
+        # Install new version (files are in dist/ subdirectory)
+        cp -r "$TEMP_DIR/dist/flipdot" "$FLIPDOT_HOME/"
+        cp "$TEMP_DIR/dist/README.md" "$FLIPDOT_HOME/" 2>/dev/null || true
         chown -R "$FLIPDOT_USER:$FLIPDOT_USER" "$FLIPDOT_HOME/flipdot"
 
         # Update version file
