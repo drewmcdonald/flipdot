@@ -102,7 +102,7 @@ function AuthenticatedApp() {
       const duration = frame.duration_ms || 100; // Default 100ms per frame
       currentFrameIndex++;
 
-      animationTimeout = window.setTimeout(showNextFrame, duration);
+      animationTimeout = globalThis.setTimeout(showNextFrame, duration);
     };
 
     // Start animation
@@ -142,7 +142,7 @@ function AuthenticatedApp() {
 
     if (isPolling) {
       pollContent(); // Initial poll
-      interval = window.setInterval(pollContent, 2000); // Poll every 2s
+      interval = globalThis.setInterval(pollContent, 2000); // Poll every 2s
     }
 
     return () => {
