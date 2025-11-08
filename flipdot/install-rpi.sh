@@ -3,7 +3,7 @@
 # FlipDot Driver Installation Script for Raspberry Pi
 # This script downloads, installs, and sets up the FlipDot driver to run on startup
 #
-# Usage: bash $(curl -fsSL https://raw.githubusercontent.com/drewmcdonald/flipdot/main/flipdot/install-rpi.sh)
+# Usage: bash <(curl -fsSL https://raw.githubusercontent.com/drewmcdonald/flipdot/main/flipdot/install-rpi.sh)
 #
 # Or locally: bash install-rpi.sh
 
@@ -85,10 +85,10 @@ get_latest_release() {
 
     local download_url
     if [ "$FLIPDOT_VERSION" = "latest" ]; then
-        download_url=$(curl -fsSL "$RELEASE_URL/latest" | grep -o '"browser_download_url": "[^"]*flipdot\.tar\.gz[^"]*"' | head -1 | cut -d'"' -f4)
+        download_url=$(curl -fsSL "$RELEASE_URL/latest" | grep '"browser_download_url"' | grep 'flipdot\.tar\.gz' | head -1 | cut -d'"' -f4)
         FLIPDOT_VERSION=$(curl -fsSL "$RELEASE_URL/latest" | grep '"tag_name"' | head -1 | cut -d'"' -f4)
     else
-        download_url=$(curl -fsSL "$RELEASE_URL/tags/$FLIPDOT_VERSION" | grep -o '"browser_download_url": "[^"]*flipdot\.tar\.gz[^"]*"' | head -1 | cut -d'"' -f4)
+        download_url=$(curl -fsSL "$RELEASE_URL/tags/$FLIPDOT_VERSION" | grep '"browser_download_url"' | grep 'flipdot\.tar\.gz' | head -1 | cut -d'"' -f4)
     fi
 
     if [ -z "$download_url" ]; then
@@ -321,7 +321,7 @@ if [ "$FLIPDOT_AUTO_UPDATE" = "true" ]; then
     TEMP_DIR=$(mktemp -d)
     trap "rm -rf $TEMP_DIR" EXIT
 
-    DOWNLOAD_URL=$(curl -fsSL "$RELEASE_URL/tags/$LATEST_VERSION" | grep -o '"browser_download_url": "[^"]*flipdot-rpi[^"]*"' | head -1 | cut -d'"' -f4)
+    DOWNLOAD_URL=$(curl -fsSL "$RELEASE_URL/tags/$LATEST_VERSION" | grep '"browser_download_url"' | grep 'flipdot\.tar\.gz' | head -1 | cut -d'"' -f4)
 
     if [ -z "$DOWNLOAD_URL" ]; then
         log_error "Could not find RPi release asset"
