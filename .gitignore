@@ -44,3 +44,4 @@ graveyard/
 .mypy_cache/
 .pytest_cache/
 .local-storage
+**/.vt
