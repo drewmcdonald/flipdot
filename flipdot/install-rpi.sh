@@ -107,6 +107,10 @@ create_flipdot_user() {
     else
         log_success "User $FLIPDOT_USER already exists"
     fi
+
+    # Add user to dialout group for serial port access
+    usermod -a -G dialout "$FLIPDOT_USER"
+    log_success "Added $FLIPDOT_USER to dialout group for serial port access"
 }
 
 setup_directories() {
@@ -242,7 +246,7 @@ Wants=network-online.target
 Type=simple
 User=$FLIPDOT_USER
 WorkingDirectory=$FLIPDOT_HOME
-ExecStart=$FLIPDOT_HOME/venv/bin/python -m flipdot.driver.main --config $FLIPDOT_HOME/config.json
+ExecStart=$FLIPDOT_HOME/venv/bin/python -m flipdot.main --config $FLIPDOT_HOME/config.json
 Restart=always
 RestartSec=10
 StandardOutput=journal

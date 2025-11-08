@@ -8,7 +8,7 @@ Wants=network-online.target
 Type=simple
 User=flipdot
 WorkingDirectory=/opt/flipdot
-ExecStart=/opt/flipdot/venv/bin/python -m flipdot.driver.main --config /opt/flipdot/config.json
+ExecStart=/opt/flipdot/venv/bin/python -m flipdot.main --config /opt/flipdot/config.json
 Restart=always
 RestartSec=10
 

@@ -47,9 +47,19 @@ class ContentState:
 
         # If we're on the last frame
         if self.frame_index >= len(self.content.frames) - 1:
-            # Not looping, we're done
+            # Not looping
             if not playback.loop:
-                return True
+                # If the frame has a duration, check if it has elapsed
+                current_frame = self.current_frame
+                if current_frame.duration_ms:
+                    elapsed_ms = (
+                        time.time() - self.frame_start_time - self.time_paused
+                    ) * 1000
+                    if elapsed_ms >= current_frame.duration_ms:
+                        return True
+                    return False
+                # If duration is None/0, display indefinitely (not complete)
+                return False
 
             # Looping with a count limit
             if (
