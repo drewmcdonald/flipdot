@@ -122,9 +122,25 @@ class FlippyModule:
             Binary command to send over serial
         """
         start_bytes = START_BYTES_FLUSH if flush else START_BYTES_BUFFER
-        packed_bits = pack_bits_little_endian(self.content)
 
-        return start_bytes + bytes([self.address]) + packed_bits + END_BYTES
+        # Pack bits column-wise (like numpy packbits with axis=0)
+        # For each column, pack the bits from top to bottom
+        packed_bits = bytearray()
+        for col in range(self.width):
+            # Extract column bits (top to bottom)
+            col_bits: list[int] = []
+            for row in range(self.height):
+                bit_idx = row * self.width + col
+                col_bits.append(self.content[bit_idx])
+
+            # Pack this column into bytes (little-endian bit order)
+            byte_val = 0
+            for bit_pos, bit in enumerate(col_bits):
+                if bit:
+                    byte_val |= 1 << bit_pos
+            packed_bits.append(byte_val)
+
+        return start_bytes + bytes([self.address]) + bytes(packed_bits) + END_BYTES
 
 
 @final
