@@ -128,9 +128,10 @@ function AuthenticatedApp() {
         if (response.ok) {
           const data = await response.json();
 
-          if (data.status === "updated" && data.content) {
-            setCurrentContent(data.content);
-          } else if (data.status === "clear") {
+          if (data.status === "updated" && data.playlist && data.playlist.length > 0) {
+            // Use first item from playlist
+            setCurrentContent(data.playlist[0]);
+          } else if (data.status === "clear" || (data.status === "updated" && (!data.playlist || data.playlist.length === 0))) {
             setCurrentContent(null);
             setDisplayBits(new Array(28 * 14).fill(0));
           }
