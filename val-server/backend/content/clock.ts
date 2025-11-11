@@ -60,8 +60,6 @@ export async function generateClockContent(): Promise<Content> {
     content_id: getClockContentId(hour, minute),
     frames: [frame],
     playback: {
-      priority: CLOCK_PRIORITY,
-      interruptible: CLOCK_INTERRUPTIBLE,
       loop: false,
     },
     metadata: {

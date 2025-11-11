@@ -55,6 +55,8 @@ export function getTextCacheKey(text: string): string {
 
 /**
  * Generate static text content
+ * Note: priority and interruptible are kept as parameters for server-side use
+ * but are NOT included in the Content playback (driver manages queue now)
  */
 export async function generateTextContent(
   text: string,
@@ -71,8 +73,6 @@ export async function generateTextContent(
     content_id: getTextContentId(text),
     frames: [frame],
     playback: {
-      priority,
-      interruptible,
       loop: false,
     },
     metadata: {
@@ -85,6 +85,8 @@ export async function generateTextContent(
 
 /**
  * Generate scrolling text content
+ * Note: priority and interruptible are kept as parameters for server-side use
+ * but are NOT included in the Content playback (driver manages queue now)
  */
 export async function generateScrollingTextContent(
   text: string,
@@ -109,8 +111,6 @@ export async function generateScrollingTextContent(
     content_id: `scroll:${getTextContentId(text)}`,
     frames,
     playback: {
-      priority,
-      interruptible,
       loop: true, // Loop the scrolling animation
     },
     metadata: {

@@ -200,7 +200,7 @@ class ErrorHandler:
 
     def set_last_successful(self, response: ContentResponse) -> None:
         """Record the last successful content fetch."""
-        if response.content:
+        if response.playlist:
             self.last_successful_content = response
 
     def get_fallback_response(self) -> ContentResponse | None:
@@ -212,10 +212,10 @@ class ErrorHandler:
         """
         if self.fallback == ErrorFallback.KEEP_LAST:
             if self.last_successful_content:
-                logger.info("Using last successful content as fallback")
+                logger.info("Using last successful playlist as fallback")
                 return self.last_successful_content
             else:
-                logger.warning("No previous content available for fallback")
+                logger.warning("No previous playlist available for fallback")
                 return None
 
         elif self.fallback == ErrorFallback.BLANK:

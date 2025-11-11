@@ -1,15 +1,15 @@
 """
-Content queue with priority-based interruptions and timing logic.
+Simple playlist-based content queue.
 
-The queue manages what content to display and when to advance frames.
-Higher priority content can interrupt lower priority content.
+The server sends a complete playlist, and the client just plays it in order.
+No priorities, no interruptions, no complex state management.
 """
 
 from __future__ import annotations
 
 import logging
-import threading
 import time
+from collections import deque
 from typing import TYPE_CHECKING
 
 from flipdot.models import Content, Frame
@@ -28,9 +28,6 @@ class ContentState:
         self.frame_index: int = 0
         self.loop_count: int = 0
         self.frame_start_time: float = time.time()
-        self.paused: bool = False
-        self.paused_at: float | None = None
-        self.time_paused: float = 0  # Total time spent paused
 
     @property
     def current_frame(self) -> Frame:
@@ -40,9 +37,6 @@ class ContentState:
     @property
     def is_complete(self) -> bool:
         """Check if this content has finished playing."""
-        if self.paused:
-            return False
-
         playback = self.content.playback
 
         # If we're on the last frame
@@ -52,9 +46,7 @@ class ContentState:
                 # If the frame has a duration, check if it has elapsed
                 current_frame = self.current_frame
                 if current_frame.duration_ms:
-                    elapsed_ms = (
-                        time.time() - self.frame_start_time - self.time_paused
-                    ) * 1000
+                    elapsed_ms = (time.time() - self.frame_start_time) * 1000
                     if elapsed_ms >= current_frame.duration_ms:
                         return True
                     return False
@@ -77,9 +69,6 @@ class ContentState:
         Returns:
             True if frame was advanced, False otherwise
         """
-        if self.paused:
-            return False
-
         current_frame = self.current_frame
         duration = current_frame.duration_ms
 
@@ -87,7 +76,7 @@ class ContentState:
         if not duration:
             return False
 
-        elapsed_ms = (time.time() - self.frame_start_time - self.time_paused) * 1000
+        elapsed_ms = (time.time() - self.frame_start_time) * 1000
 
         if elapsed_ms >= duration:
             # Move to next frame
@@ -98,47 +87,27 @@ class ContentState:
                 if self.content.playback.loop:
                     self.frame_index = 0
                     self.loop_count += 1
+                    # Reset timer for the loop
+                    self.frame_start_time = time.time()
                 else:
-                    # Don't advance past last frame, mark as complete
+                    # Don't advance past last frame
+                    # Don't reset timer - let is_complete detect the end
                     self.frame_index = len(self.content.frames) - 1
+            else:
+                # Moving to a new frame, reset timer
+                self.frame_start_time = time.time()
 
-            self.frame_start_time = time.time()
-            self.time_paused = 0
             return True
 
         return False
 
-    def pause(self) -> None:
-        """Pause playback (for interruptions)."""
-        if not self.paused:
-            self.paused = True
-            self.paused_at = time.time()
-
-    def resume(self) -> None:
-        """Resume playback after interruption."""
-        if self.paused and self.paused_at:
-            self.time_paused += time.time() - self.paused_at
-            self.paused = False
-            self.paused_at = None
-
-    def reset(self) -> None:
-        """Reset to the beginning."""
-        self.frame_index = 0
-        self.loop_count = 0
-        self.frame_start_time = time.time()
-        self.time_paused = 0
-
 
 class ContentQueue:
     """
-    Priority-based queue for managing display content.
+    Simple FIFO playlist for managing display content.
 
-    Higher priority content interrupts lower priority content.
-    When an interruption completes, the previous content resumes.
-
-    Thread-safe for concurrent access from push server and main thread.
-    All public methods are protected by a reentrant lock to prevent race conditions.
-    Enforces memory bounds to prevent OOM from malicious/buggy servers.
+    Server sends complete playlist. Client just plays it in order.
+    No merge logic, no priorities, no interruptions.
     """
 
     def __init__(self, limits: DriverLimits | None = None):
@@ -152,96 +121,56 @@ class ContentQueue:
 
         self.limits: DriverLimits = limits if limits is not None else DEFAULT_LIMITS
         self.current: ContentState | None = None
-        self.queue: list[ContentState] = []  # Sorted by priority (highest first)
-        self.interrupted: list[ContentState] = []  # Stack of interrupted content
-        # Reentrant lock for thread safety
-        self._lock: threading.RLock = threading.RLock()
+        self.queue: deque[ContentState] = deque()
 
-    def add_content(self, content: Content) -> None:
+    def set_playlist(self, playlist: list[Content]) -> None:
         """
-        Add new content to the queue.
+        Replace entire queue with new playlist from server.
 
-        If the content has higher priority than current, it interrupts.
-        Otherwise, it's added to the queue in priority order.
+        First item becomes current (preserving frame timing if same ID).
+        Rest go into queue in order.
 
         Args:
-            content: Content to add
+            playlist: Complete ordered playlist from server
         """
-        with self._lock:
-            new_state = ContentState(content)
-            priority = content.playback.priority
+        if not playlist:
+            logger.info("Received empty playlist, clearing")
+            self.clear()
+            return
 
-            logger.debug(
-                f"Adding content {content.content_id} with priority {priority}"
-            )
+        # Check if first item is same as current (preserve timing)
+        new_current = playlist[0]
+        old_current_state = self.current
 
-            # If nothing is playing, start this immediately
-            if self.current is None:
-                self.current = new_state
-                logger.info(f"Started playing {content.content_id} (queue was empty)")
-                return
+        if (
+            old_current_state
+            and old_current_state.content.content_id == new_current.content_id
+        ):
+            logger.debug(f"Preserving playback state for {new_current.content_id}")
+            # Keep existing state for smooth continuation
+            new_current_state = old_current_state
+            # But update the content object (in case frames changed)
+            new_current_state.content = new_current
+            # Validate frame index is still valid
+            if new_current_state.frame_index >= len(new_current.frames):
+                new_current_state.frame_index = 0
+                new_current_state.loop_count = 0
+                new_current_state.frame_start_time = time.time()
+        else:
+            # New content, start fresh
+            logger.info(f"Starting new content: {new_current.content_id}")
+            new_current_state = ContentState(new_current)
 
-            current_priority = self.current.content.playback.priority
+        self.current = new_current_state
 
-            # Higher priority interrupts current content
-            if priority > current_priority:
-                if self.current.content.playback.interruptible:
-                    logger.info(
-                        f"Interrupting {self.current.content.content_id} "
-                        + f"(priority {current_priority}) with {content.content_id} "
-                        + f"(priority {priority})"
-                    )
-                    self.current.pause()
-                    self.interrupted.append(self.current)
-
-                    # Enforce memory bound on interrupted stack
-                    if len(self.interrupted) > self.limits.queue.max_interrupted_items:
-                        dropped = self.interrupted.pop(0)
-                        logger.warning(
-                            "Interrupted stack overflow: dropped "
-                            + f"{dropped.content.content_id}"
-                        )
-
-                    self.current = new_state
-                else:
-                    logger.warning(
-                        f"Cannot interrupt {self.current.content.content_id} "
-                        + "(marked as non-interruptible)"
-                    )
-                    self._add_to_queue(new_state)
-            else:
-                # Add to queue in priority order
-                self._add_to_queue(new_state)
-
-    def _add_to_queue(self, state: ContentState) -> None:
-        """
-        Add a state to the queue in priority order (highest first).
-
-        If queue is full, drops the lowest-priority item.
-        """
-        priority = state.content.playback.priority
-
-        # Find insertion point
-        insert_idx = 0
-        for i, queued in enumerate(self.queue):
-            if priority <= queued.content.playback.priority:
-                insert_idx = i + 1
-            else:
-                break
-
-        self.queue.insert(insert_idx, state)
-
-        # Enforce memory bound: drop lowest-priority item if queue is too full
-        if len(self.queue) > self.limits.queue.max_queued_items:
-            dropped = self.queue.pop()
-            logger.warning(
-                f"Queue overflow: dropped {dropped.content.content_id} "
-                + f"(priority {dropped.content.playback.priority})"
-            )
+        # Replace queue with rest of playlist
+        self.queue.clear()
+        for content in playlist[1:]:
+            self.queue.append(ContentState(content))
 
         logger.info(
-            f"Added {state.content.content_id} to queue at position {insert_idx} "
-            + f"({len(self.queue)} items)"
+            f"Playlist updated: current={new_current.content_id}, "
+            f"queue={len(self.queue)} items"
         )
 
     def update(self) -> Frame | None:
@@ -250,98 +179,50 @@ class ContentQueue:
 
         This should be called in the main loop. It handles:
         - Advancing frames based on timing
-        - Removing completed content
-        - Resuming interrupted content
+        - Moving to next content when current completes
 
         Returns:
             The current frame to display, or None if nothing to display
         """
-        with self._lock:
-            if self.current is None:
+        if self.current is None:
+            return None
+
+        # Try to advance the frame
+        if self.current.advance_frame():
+            logger.debug(
+                f"Advanced to frame {self.current.frame_index} "
+                f"of {self.current.content.content_id}"
+            )
+
+        # Check if current content is complete
+        if self.current.is_complete:
+            logger.info(f"Content {self.current.content.content_id} completed")
+
+            # Move to next in queue
+            if self.queue:
+                self.current = self.queue.popleft()
+                logger.info(
+                    f"Started next content: {self.current.content.content_id} "
+                    f"({len(self.queue)} remaining in queue)"
+                )
+            else:
+                # Nothing left to display
+                self.current = None
+                logger.info("Playlist complete, nothing to display")
                 return None
 
-            # Try to advance the frame
-            if self.current.advance_frame():
-                logger.debug(
-                    f"Advanced to frame {self.current.frame_index} "
-                    + f"of {self.current.content.content_id}"
-                )
-
-            # Check if current content is complete
-            if self.current.is_complete:
-                logger.info(f"Content {self.current.content.content_id} completed")
-
-                # Check if there was interrupted content to resume
-                if self.interrupted:
-                    self.current = self.interrupted.pop()
-                    self.current.resume()
-                    logger.info(
-                        f"Resumed interrupted content {self.current.content.content_id}"
-                    )
-                # Otherwise, move to next in queue
-                elif self.queue:
-                    self.current = self.queue.pop(0)
-                    logger.info(
-                        f"Started next queued content {self.current.content.content_id}"
-                    )
-                else:
-                    # Nothing left to display
-                    self.current = None
-                    logger.info("Queue is empty")
-                    return None
-
-            return self.current.current_frame if self.current else None
+        return self.current.current_frame if self.current else None
 
     def clear(self) -> None:
         """Clear all content from the queue."""
-        with self._lock:
-            logger.info("Clearing content queue")
-            self.current = None
-            self.queue.clear()
-            self.interrupted.clear()
+        logger.info("Clearing content queue")
+        self.current = None
+        self.queue.clear()
 
     def has_content(self) -> bool:
         """Check if there's any content to display."""
-        with self._lock:
-            return self.current is not None
+        return self.current is not None
 
     def get_current_content_id(self) -> str | None:
         """Get the ID of the currently playing content."""
-        with self._lock:
-            return self.current.content.content_id if self.current else None
-
-    def replace_if_same_id(self, content: Content) -> bool:
-        """
-        Replace current content if it has the same ID (for updates).
-
-        Args:
-            content: New content
-
-        Returns:
-            True if replaced, False if not found
-        """
-        with self._lock:
-            if self.current and self.current.content.content_id == content.content_id:
-                logger.info(f"Replacing current content {content.content_id}")
-                # Keep the current frame index and timing if possible
-                old_frame_idx = self.current.frame_index
-                self.current = ContentState(content)
-                if old_frame_idx < len(content.frames):
-                    self.current.frame_index = old_frame_idx
-                return True
-
-            # Check queue
-            for i, state in enumerate(self.queue):
-                if state.content.content_id == content.content_id:
-                    logger.info(f"Replacing queued content {content.content_id}")
-                    self.queue[i] = ContentState(content)
-                    return True
-
-            # Check interrupted
-            for i, state in enumerate(self.interrupted):
-                if state.content.content_id == content.content_id:
-                    logger.info(f"Replacing interrupted content {content.content_id}")
-                    self.interrupted[i] = ContentState(content)
-                    return True
-
-            return False
+        return self.current.content.content_id if self.current else None

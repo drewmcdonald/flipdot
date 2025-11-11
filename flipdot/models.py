@@ -80,15 +80,6 @@ class PlaybackMode(BaseModel):
         ge=1,
         description="How many times to loop (null = infinite if loop=true)",
     )
-    priority: int = Field(
-        default=0,
-        ge=0,
-        le=99,
-        description="Priority level: 0=normal, 10=notification, 99=urgent",
-    )
-    interruptible: bool = Field(
-        default=True, description="Can this content be interrupted by higher priority?"
-    )
 
     @field_validator("loop_count")
     @classmethod
@@ -215,31 +206,31 @@ class Content(BaseModel):
 class ResponseStatus(str, Enum):
     """Status of a content response."""
 
-    UPDATED = "updated"  # New content available
-    NO_CHANGE = "no_change"  # No change, keep current content
+    UPDATED = "updated"  # Playlist provided
     CLEAR = "clear"  # Clear display
 
 
 class ContentResponse(BaseModel):
-    """Response from the content server."""
+    """Response from the content server with complete playlist."""
 
     status: ResponseStatus = Field(..., description="Status of the response")
-    content: Content | None = Field(
-        default=None, description="Content data (only if status=updated)"
+    playlist: list[Content] = Field(
+        default_factory=list,
+        description="Complete playlist to display. First item plays immediately, rest queued in order.",
     )
     poll_interval_ms: int = Field(
         default=30000, ge=1000, description="How long to wait before next poll"
     )
 
-    @field_validator("content")
+    @field_validator("playlist")
     @classmethod
-    def validate_content(
-        cls, v: Content | None, info: ValidationInfo
-    ) -> Content | None:
-        """Validate that content is present when status is updated."""
+    def validate_playlist(
+        cls, v: list[Content], info: ValidationInfo
+    ) -> list[Content]:
+        """Validate that playlist is present when status is updated."""
         status = info.data.get("status")
-        if status == ResponseStatus.UPDATED and v is None:
-            raise ValueError("content must be provided when status is 'updated'")
+        if status == ResponseStatus.UPDATED and not v:
+            raise ValueError("playlist must be non-empty when status is 'updated'")
         return v
 
 
@@ -271,17 +262,6 @@ class DriverConfig(BaseModel):
     poll_endpoint: str = Field(..., description="URL to poll for content updates")
     poll_interval_ms: int = Field(
         default=30000, ge=1000, description="Default polling interval"
-    )
-
-    # Push server configuration
-    enable_push: bool = Field(
-        default=False, description="Enable HTTP server for push notifications"
-    )
-    push_port: int = Field(
-        default=8080, ge=1, le=65535, description="Port for push server"
-    )
-    push_host: str = Field(
-        default="0.0.0.0", description="Host address for push server"
     )
 
     # Authentication

@@ -112,14 +112,14 @@ export class ContentRouter {
   }
 
   /**
-   * Select highest priority content from all sources
+   * Generate complete playlist from all sources ordered by priority
    */
-  async selectContent(): Promise<Content | null> {
+  async generatePlaylist(): Promise<Content[]> {
     const sources = this.getSources();
 
     if (sources.length === 0) {
       console.warn("No content sources registered");
-      return null;
+      return [];
     }
 
     // Get content from all sources
@@ -138,16 +138,23 @@ export class ContentRouter {
 
     if (available.length === 0) {
       console.warn("No content available from any source");
-      return null;
+      return [];
     }
 
-    // Sort by priority (descending)
+    // Sort by priority (descending - highest first)
     available.sort((a, b) => b.source.priority - a.source.priority);
 
-    // Return highest priority content
-    const selected = available[0].content;
+    // Return all content as ordered playlist
+    return available.map((r) => r.content);
+  }
 
-    return selected;
+  /**
+   * Select highest priority content from all sources
+   * @deprecated Use generatePlaylist() instead
+   */
+  async selectContent(): Promise<Content | null> {
+    const playlist = await this.generatePlaylist();
+    return playlist.length > 0 ? playlist[0] : null;
   }
 
   /**

@@ -32,47 +32,29 @@ const DEFAULT_POLL_INTERVAL_MS = 30000;
 
 /**
  * GET /api/flipdot/content
- * Main polling endpoint
+ * Main polling endpoint - returns complete playlist
  */
 app.get("/api/flipdot/content", bearerAuthMiddleware, async (c) => {
   try {
-    // Load last content ID from storage (for "no_change" optimization)
-    await router.loadLastContentId();
+    // Generate playlist from all sources (ordered by priority)
+    const playlist = await router.generatePlaylist();
 
-    // Select highest priority content
-    const content = await router.selectContent();
-
-    if (!content) {
+    if (playlist.length === 0) {
       // No content available - return "clear" status
       const response: ContentResponse = {
         status: "clear",
+        playlist: [],
         poll_interval_ms: DEFAULT_POLL_INTERVAL_MS,
       };
       return c.json(response);
     }
 
-    // Check if content has changed
-    const hasChanged = router.hasContentChanged(content);
-
-    if (!hasChanged) {
-      // Content hasn't changed - return "no_change"
-      const response: ContentResponse = {
-        status: "no_change",
-        poll_interval_ms: DEFAULT_POLL_INTERVAL_MS,
-      };
-      return c.json(response);
-    }
-
-    // Content has changed - return new content
+    // Return complete playlist
     const response: ContentResponse = {
       status: "updated",
-      content: content,
+      playlist: playlist,
       poll_interval_ms: DEFAULT_POLL_INTERVAL_MS,
     };
-
-    // Update and save last content ID
-    router.updateLastContentId(content.content_id);
-    await router.saveLastContentId();
 
     return c.json(response);
   } catch (error) {

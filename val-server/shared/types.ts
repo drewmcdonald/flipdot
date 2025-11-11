@@ -27,10 +27,6 @@ export interface PlaybackMode {
   loop?: boolean;
   /** Number of times to loop (null = infinite) */
   loop_count?: number | null;
-  /** Priority level (0-99, higher = more important) */
-  priority?: number;
-  /** Whether content can be interrupted by higher priority */
-  interruptible?: boolean;
 }
 
 /**
@@ -50,16 +46,21 @@ export interface Content {
 /**
  * Response status from content server
  */
-export type ResponseStatus = "updated" | "no_change" | "clear";
+export type ResponseStatus = "updated" | "clear";
 
 /**
  * Top-level response from GET /api/flipdot/content
+ * Server sends complete playlist - driver plays in order
  */
 export interface ContentResponse {
   /** Status of the content update */
   status: ResponseStatus;
-  /** Content to display (required when status="updated") */
-  content?: Content;
+  /**
+   * Complete ordered playlist to display.
+   * First item plays immediately, rest queued in order.
+   * Required when status="updated"
+   */
+  playlist: Content[];
   /** Polling interval in milliseconds (minimum 1000) */
   poll_interval_ms: number;
 }

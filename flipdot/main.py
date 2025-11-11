@@ -21,12 +21,10 @@ from typing import TYPE_CHECKING, cast, final
 from flipdot.client import ContentClient, ErrorHandler
 from flipdot.hardware import Panel, SerialConnection
 from flipdot.models import (
-    Content,
     DriverConfig,
     ResponseStatus,
 )
 from flipdot.queue import ContentQueue
-from flipdot.server import PushServer
 
 if TYPE_CHECKING:
     from flipdot.config import DriverLimits
@@ -87,38 +85,6 @@ class FlipDotDriver:
         )
         self.error_handler = ErrorHandler(fallback=config.error_fallback)
 
-        # Initialize push server if enabled
-        self.push_server: PushServer | None = None
-        if config.enable_push:
-            self.push_server = PushServer(
-                host=config.push_host,
-                port=config.push_port,
-                auth=config.auth,
-                content_callback=self._handle_push_content,
-                limits=limits,
-            )
-
-    def _handle_push_content(self, content: Content) -> None:
-        """
-        Handle content received via push notification.
-
-        Args:
-            content: Pushed content
-        """
-        logger.info(f"Received push content: {content.content_id}")
-
-        # Validate content dimensions against display before queuing
-        height, width = self.panel.dimensions
-        try:
-            content.validate_display_dimensions(width, height)
-        except ValueError as e:
-            logger.error(f"Rejecting push content due to dimension mismatch: {e}")
-            return
-
-        self.queue.add_content(content)
-        # Reset poll timer since we just got fresh data
-        self.client.reset_poll_timer()
-
     def _poll_for_content(self) -> None:
         """Poll the server for content updates."""
         if not self.client.should_poll():
@@ -134,30 +100,27 @@ class FlipDotDriver:
                 return
 
         # Record successful fetch
-        if response.content:
+        if response.playlist:
             self.error_handler.set_last_successful(response)
 
         # Process response
-        if response.status == ResponseStatus.UPDATED and response.content:
-            # Validate content dimensions against display before queuing
+        if response.status == ResponseStatus.UPDATED:
+            # Validate all content dimensions against display before accepting
             height, width = self.panel.dimensions
             try:
-                response.content.validate_display_dimensions(width, height)
+                for content in response.playlist:
+                    content.validate_display_dimensions(width, height)
             except ValueError as e:
-                logger.error(f"Rejecting content due to dimension mismatch: {e}")
+                logger.error(f"Rejecting playlist due to dimension mismatch: {e}")
                 return
 
-            # Check if we should replace existing content with same ID
-            if not self.queue.replace_if_same_id(response.content):
-                # Add as new content
-                self.queue.add_content(response.content)
+            # Replace entire queue with new playlist
+            self.queue.set_playlist(response.playlist)
 
         elif response.status == ResponseStatus.CLEAR:
             logger.info("Server requested display clear")
             self.queue.clear()
             self._clear_display()
-
-        # NO_CHANGE means keep current content, do nothing
 
     def _clear_display(self) -> None:
         """Clear the display (show blank)."""
@@ -208,10 +171,6 @@ class FlipDotDriver:
         """Start the driver."""
         logger.info("Starting FlipDot driver...")
 
-        # Start push server if enabled
-        if self.push_server:
-            self.push_server.start()
-
         self.running = True
 
         # Main loop
@@ -242,10 +201,6 @@ class FlipDotDriver:
 
         logger.info("Stopping driver...")
         self.running = False
-
-        # Stop push server
-        if self.push_server:
-            self.push_server.stop()
 
         # Clear display
         logger.info("Clearing display...")
