@@ -1,5 +1,6 @@
 /**
  * Simple 5×7 bitmap font for FlipDot display
+ * All glyphs are pre-padded to 7 pixels height with baseline alignment
  * Character width: 5 pixels, height: 7 pixels
  * 1 pixel spacing between characters
  */
@@ -8,6 +9,19 @@ export const FONT_NAME = "simple5x7";
 export const CHAR_WIDTH = 5;
 export const CHAR_HEIGHT = 7;
 export const CHAR_SPACING = 1;
+
+/**
+ * Baseline alignment constants
+ * BASELINE_OFFSET: Distance from top of font to baseline (pixels)
+ * For this 7-pixel font, baseline is at the bottom (row 7)
+ */
+export const BASELINE_OFFSET = 7;
+
+/**
+ * DISPLAY_BASELINE: Standard baseline position on 14-pixel display
+ * Set at pixel 11 from top, leaving 3 pixels below for descenders
+ */
+export const DISPLAY_BASELINE = 11;
 
 /**
  * Bitmap font data: each character is 7 rows × 5 columns
@@ -396,7 +410,9 @@ export function measureText(text: string): number {
 
 /**
  * Render text at a specific X offset (for scrolling)
- * Returns a flat bit array for the display
+ * All glyphs are pre-padded to CHAR_HEIGHT with baseline alignment.
+ * This function positions the font block on the display.
+ * Returns a flat bit array for the display.
  */
 export function renderTextAtOffset(
   text: string,
@@ -404,7 +420,8 @@ export function renderTextAtOffset(
   displayHeight: number,
   xOffset: number,
 ): number[] {
-  const yOffset = Math.floor((displayHeight - CHAR_HEIGHT) / 2);
+  // Calculate y-offset to align font baseline to display baseline
+  const yOffset = DISPLAY_BASELINE - BASELINE_OFFSET;
 
   // Initialize empty display buffer
   const bits = new Array(displayWidth * displayHeight).fill(0);
@@ -472,7 +489,8 @@ export function renderScrollingText(
 
 /**
  * Render text to a flat bit array (28×14 pixels = 392 bits)
- * Text is centered horizontally and vertically
+ * All glyphs are pre-padded to CHAR_HEIGHT with baseline alignment.
+ * Text is centered horizontally, baseline-aligned vertically.
  */
 export function renderText(
   text: string,
@@ -483,7 +501,8 @@ export function renderText(
 
   // Calculate horizontal centering offset
   const xOffset = Math.floor((displayWidth - textWidth) / 2);
-  const yOffset = Math.floor((displayHeight - CHAR_HEIGHT) / 2);
+  // Calculate y-offset to align font baseline to display baseline
+  const yOffset = DISPLAY_BASELINE - BASELINE_OFFSET;
 
   // Initialize empty display buffer
   const bits = new Array(displayWidth * displayHeight).fill(0);

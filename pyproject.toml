@@ -21,6 +21,7 @@ types-pyserial = "^3.5.0.20250130"
 watchfiles = "^1.0.4"
 pytest = "^8.4.2"
 basedpyright = "^1.32.1"
+freetype-py = "^2.5.1"
 
 [build-system]
 requires = ["poetry-core"]
