@@ -161,6 +161,7 @@ function AuthenticatedApp() {
     priority: number;
     duration: number;
     scroll: boolean;
+    font: string;
   }) => {
     try {
       const response = await fetch("/api/flipdot/text", {
@@ -174,6 +175,7 @@ function AuthenticatedApp() {
           priority: formData.priority,
           ttl_ms: formData.duration * 1000,
           scroll: formData.scroll,
+          font: formData.font,
         }),
       });
 

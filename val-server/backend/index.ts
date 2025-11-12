@@ -16,6 +16,7 @@ import {
   createCustomTextSource,
   type CustomTextOptions,
 } from "./content/text.ts";
+import { AVAILABLE_FONTS, DEFAULT_FONT } from "./rendering/font-loader.ts";
 import { serveFile } from "https://esm.town/v/std/utils@85-main/index.ts";
 
 // Initialize Hono app
@@ -87,6 +88,16 @@ app.post("/api/flipdot/text", bearerAuthMiddleware, async (c) => {
       );
     }
 
+    // Validate font if provided
+    if (body.font && !AVAILABLE_FONTS.includes(body.font)) {
+      return c.json(
+        {
+          error: `Invalid font. Available fonts: ${AVAILABLE_FONTS.join(", ")}`,
+        },
+        400,
+      );
+    }
+
     // Create custom text source with provided options
     const options: CustomTextOptions = {
       text: body.text.toUpperCase(),
@@ -95,6 +106,7 @@ app.post("/api/flipdot/text", bearerAuthMiddleware, async (c) => {
       interruptible: body.interruptible ?? true,
       scroll: body.scroll ?? false,
       frame_delay_ms: body.frame_delay_ms ?? 100,
+      font: body.font ?? DEFAULT_FONT,
     };
 
     // Validate priority range
@@ -121,6 +133,7 @@ app.post("/api/flipdot/text", bearerAuthMiddleware, async (c) => {
       type: source.type,
       priority: source.priority,
       ttl_ms: source.ttl_ms,
+      font: options.font,
       expires_at: new Date(Date.now() + source.ttl_ms).toISOString(),
     });
   } catch (error) {
@@ -179,6 +192,17 @@ app.get(
     return c.json({ authenticated: !!authenticated });
   },
 );
+
+/**
+ * GET /api/flipdot/fonts
+ * List available fonts (no auth required)
+ */
+app.get("/api/flipdot/fonts", (c) => {
+  return c.json({
+    default: DEFAULT_FONT,
+    available: AVAILABLE_FONTS,
+  });
+});
 
 /**
  * GET /health

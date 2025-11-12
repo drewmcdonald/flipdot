@@ -7,6 +7,7 @@ interface ControlPanelProps {
     priority: number;
     duration: number;
     scroll: boolean;
+    font: string;
   }) => void;
   onClearAll: () => void;
   onTogglePolling: () => void;
@@ -23,6 +24,7 @@ export function ControlPanel({
   const [priority, setPriority] = useState(30);
   const [duration, setDuration] = useState(60);
   const [scroll, setScroll] = useState(false);
+  const [font, setFont] = useState("axion_6x7");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +35,7 @@ export function ControlPanel({
       priority,
       duration,
       scroll,
+      font,
     });
 
     // Reset form
@@ -85,6 +88,37 @@ export function ControlPanel({
           <small style={{ color: "#9ca3af", fontSize: "0.8rem" }}>
             Text longer than display width will auto-scroll
           </small>
+        </div>
+
+        <div>
+          <label
+            htmlFor="messageFont"
+            style={{
+              display: "block",
+              marginBottom: "0.5rem",
+              fontWeight: "500",
+              fontSize: "0.875rem",
+            }}
+          >
+            Font:
+          </label>
+          <select
+            id="messageFont"
+            value={font}
+            onChange={(e) => setFont(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "0.5rem",
+              border: "1px solid #d1d5db",
+              borderRadius: "4px",
+              fontSize: "1rem",
+              backgroundColor: "white",
+            }}
+          >
+            <option value="axion_6x7">Axion 6x7 (default)</option>
+            <option value="cg_pixel_4x5">CG Pixel 4x5</option>
+            <option value="hanover_6x13m">Hanover 6x13m</option>
+          </select>
         </div>
 
         <div>
