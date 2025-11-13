@@ -11,6 +11,8 @@ interface ControlPanelProps {
   onClearAll: () => void;
   onTogglePolling: () => void;
   isPolling: boolean;
+  onTogglePaintMode?: () => void;
+  isPaintMode?: boolean;
 }
 
 export function ControlPanel({
@@ -18,6 +20,8 @@ export function ControlPanel({
   onClearAll,
   onTogglePolling,
   isPolling,
+  onTogglePaintMode,
+  isPaintMode = false,
 }: ControlPanelProps) {
   const [text, setText] = useState("");
   const [priority, setPriority] = useState(30);
@@ -202,6 +206,33 @@ export function ControlPanel({
         </div>
       </form>
 
+      {onTogglePaintMode && (
+        <div style={{ marginTop: "1.5rem", paddingTop: "1.5rem", borderTop: "1px solid #e5e7eb" }}>
+          <button
+            type="button"
+            onClick={onTogglePaintMode}
+            style={{
+              width: "100%",
+              padding: "0.75rem 1.25rem",
+              backgroundColor: isPaintMode ? "#f59e0b" : "#8b5cf6",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "1rem",
+            }}
+          >
+            {isPaintMode ? "Exit Paint Mode" : "Enter Paint Mode"}
+          </button>
+          <small style={{ display: "block", marginTop: "0.5rem", color: "#9ca3af", fontSize: "0.8rem" }}>
+            {isPaintMode
+              ? "Click above to exit and clear canvas"
+              : "Draw directly on a 28×14 pixel canvas with low latency"}
+          </small>
+        </div>
+      )}
+
       <div
         style={{
           marginTop: "1.5rem",
@@ -217,6 +248,7 @@ export function ControlPanel({
         <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>
           <li>Clock: 10 (default, always visible)</li>
           <li>Text messages: 20-40 (temporary override)</li>
+          <li>Paint mode: 50 (high priority)</li>
           <li>Alerts: 50-100 (high priority)</li>
         </ul>
       </div>

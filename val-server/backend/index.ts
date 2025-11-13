@@ -16,6 +16,12 @@ import {
   createCustomTextSource,
   type CustomTextOptions,
 } from "./content/text.ts";
+import {
+  createPaintSource,
+  updatePaintBuffer,
+  clearPaintBuffer,
+  getPaintBuffer,
+} from "./content/paint.ts";
 import { serveFile } from "https://esm.town/v/std/utils@85-main/index.ts";
 
 // Initialize Hono app
@@ -151,6 +157,96 @@ app.post("/api/flipdot/clear", bearerAuthMiddleware, (c) => {
     });
   } catch (error) {
     console.error("Error clearing messages:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+/**
+ * POST /api/flipdot/paint
+ * Submit pixel data for direct paint mode
+ */
+app.post("/api/flipdot/paint", bearerAuthMiddleware, async (c) => {
+  try {
+    const body = await c.req.json();
+
+    // Validate input
+    if (!body.bits || !Array.isArray(body.bits)) {
+      return c.json({ error: "Missing or invalid 'bits' field" }, 400);
+    }
+
+    if (body.bits.length !== 28 * 14) {
+      return c.json(
+        { error: "Invalid bits array length: expected 392 (28x14)" },
+        400,
+      );
+    }
+
+    // Update paint buffer
+    await updatePaintBuffer(body.bits);
+
+    // Ensure paint source is registered
+    const sources = router.getSources();
+    const paintSource = sources.find((s) => s.id === "paint");
+    if (!paintSource) {
+      router.registerSource(createPaintSource());
+    }
+
+    return c.json({
+      success: true,
+      message: "Paint buffer updated",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error handling paint submission:", error);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Internal server error" },
+      500,
+    );
+  }
+});
+
+/**
+ * POST /api/flipdot/paint/clear
+ * Clear the paint buffer
+ */
+app.post("/api/flipdot/paint/clear", bearerAuthMiddleware, async (c) => {
+  try {
+    await clearPaintBuffer();
+    router.unregisterSource("paint");
+
+    return c.json({
+      success: true,
+      message: "Paint buffer cleared",
+    });
+  } catch (error) {
+    console.error("Error clearing paint buffer:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+/**
+ * GET /api/flipdot/paint
+ * Get current paint buffer state
+ */
+app.get("/api/flipdot/paint", bearerAuthMiddleware, async (c) => {
+  try {
+    const buffer = await getPaintBuffer();
+
+    if (!buffer) {
+      return c.json({
+        active: false,
+        bits: null,
+        lastUpdate: null,
+      });
+    }
+
+    return c.json({
+      active: true,
+      bits: buffer.bits,
+      lastUpdate: new Date(buffer.lastUpdate).toISOString(),
+    });
+  } catch (error) {
+    console.error("Error getting paint buffer:", error);
     return c.json({ error: "Internal server error" }, 500);
   }
 });

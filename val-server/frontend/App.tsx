@@ -1,9 +1,10 @@
 /** @jsxImportSource https://esm.sh/react@18.2.0 */
-import React, { useEffect, useState } from "https://esm.sh/react@18.2.0";
+import React, { useEffect, useState, useRef, useCallback } from "https://esm.sh/react@18.2.0";
 import { Display } from "./components/Display.tsx";
 import { ControlPanel } from "./components/ControlPanel.tsx";
 import { StatusMessage } from "./components/StatusMessage.tsx";
 import { LoginForm } from "./components/LoginForm.tsx";
+import { PaintCanvas } from "./components/PaintCanvas.tsx";
 import { useAuthCheck } from "./hooks/useAuth.ts";
 
 export function App() {
@@ -49,6 +50,17 @@ function AuthenticatedApp() {
   >(null);
   const [isPolling, setIsPolling] = useState(false);
   const [currentContent, setCurrentContent] = useState<any>(null);
+  const [isPaintMode, setIsPaintMode] = useState(false);
+  const [paintBits, setPaintBits] = useState<number[]>(
+    new Array(28 * 14).fill(0),
+  );
+  const [isPageVisible, setIsPageVisible] = useState(true);
+  const [lastPaintActivity, setLastPaintActivity] = useState<number>(Date.now());
+
+  // Refs for debouncing and polling
+  const paintDebounceRef = useRef<number | null>(null);
+  const activityTimeoutRef = useRef<number | null>(null);
+  const pollIntervalRef = useRef<number | null>(null);
 
   // Helper function to decode a frame
   const decodeFrame = (frame: any): number[] => {
@@ -69,6 +81,58 @@ function AuthenticatedApp() {
     }
     return bits;
   };
+
+  // Page Visibility API - detect when tab is visible/hidden
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsPageVisible(!document.hidden);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  // Debounced paint handler with activity tracking
+  const handlePaint = useCallback((bits: number[]) => {
+    setPaintBits(bits);
+    setLastPaintActivity(Date.now());
+
+    // Clear existing debounce timer
+    if (paintDebounceRef.current) {
+      clearTimeout(paintDebounceRef.current);
+    }
+
+    // Debounce API call - send after 150ms of no changes (low latency while painting)
+    paintDebounceRef.current = globalThis.setTimeout(async () => {
+      try {
+        const response = await fetch("/api/flipdot/paint", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": "local-dev-key",
+          },
+          body: JSON.stringify({ bits }),
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          setStatusMessage({
+            type: "error",
+            text: result.error || "Failed to update paint",
+          });
+        }
+      } catch (error) {
+        console.error("Error sending paint data:", error);
+      }
+    }, 150); // 150ms debounce for low latency
+
+    // Set activity timeout - stop rapid polling after 10 seconds of inactivity
+    if (activityTimeoutRef.current) {
+      clearTimeout(activityTimeoutRef.current);
+    }
+  }, []);
 
   // Animate through frames
   useEffect(() => {
@@ -113,9 +177,9 @@ function AuthenticatedApp() {
     };
   }, [currentContent]);
 
-  // Poll the content endpoint to update display
+  // Adaptive polling with presence detection and paint mode awareness
   useEffect(() => {
-    let interval: number;
+    if (!isPolling) return;
 
     const pollContent = async () => {
       try {
@@ -141,15 +205,51 @@ function AuthenticatedApp() {
       }
     };
 
-    if (isPolling) {
-      pollContent(); // Initial poll
-      interval = globalThis.setInterval(pollContent, 2000); // Poll every 2s
-    }
+    // Determine polling interval based on mode and activity
+    const getPollingInterval = () => {
+      // Don't poll if page is not visible (presence detection)
+      if (!isPageVisible) {
+        return 30000; // 30s when tab is hidden
+      }
+
+      // Fast polling in paint mode with recent activity
+      if (isPaintMode) {
+        const timeSinceActivity = Date.now() - lastPaintActivity;
+        if (timeSinceActivity < 10000) {
+          // Active painting - 500ms for low latency
+          return 500;
+        } else if (timeSinceActivity < 30000) {
+          // Recent activity - 2s
+          return 2000;
+        }
+      }
+
+      // Default polling for normal mode
+      return 2000; // 2s default
+    };
+
+    const schedulePoll = () => {
+      const interval = getPollingInterval();
+      pollIntervalRef.current = globalThis.setTimeout(() => {
+        pollContent().then(() => {
+          // Schedule next poll if still polling
+          if (isPolling) {
+            schedulePoll();
+          }
+        });
+      }, interval);
+    };
+
+    // Start polling
+    pollContent(); // Initial poll
+    schedulePoll();
 
     return () => {
-      if (interval) clearInterval(interval);
+      if (pollIntervalRef.current) {
+        clearTimeout(pollIntervalRef.current);
+      }
     };
-  }, [isPolling]);
+  }, [isPolling, isPaintMode, lastPaintActivity, isPageVisible]);
 
   // Auto-start polling
   useEffect(() => {
@@ -229,6 +329,79 @@ function AuthenticatedApp() {
     }
   };
 
+  const handleTogglePaintMode = async () => {
+    if (isPaintMode) {
+      // Exiting paint mode - clear paint buffer
+      try {
+        await fetch("/api/flipdot/paint/clear", {
+          method: "POST",
+          headers: {
+            "X-API-Key": "local-dev-key",
+          },
+        });
+        setStatusMessage({
+          type: "info",
+          text: "Paint mode disabled",
+        });
+      } catch (error) {
+        console.error("Error clearing paint:", error);
+      }
+    } else {
+      // Entering paint mode
+      setStatusMessage({
+        type: "info",
+        text: "Paint mode enabled - draw on the canvas!",
+      });
+      // Load existing paint buffer if any
+      try {
+        const response = await fetch("/api/flipdot/paint", {
+          headers: {
+            "X-API-Key": "local-dev-key",
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.active && data.bits) {
+            setPaintBits(data.bits);
+          }
+        }
+      } catch (error) {
+        console.error("Error loading paint buffer:", error);
+      }
+    }
+    setIsPaintMode(!isPaintMode);
+  };
+
+  const handleClearPaint = async () => {
+    try {
+      const response = await fetch("/api/flipdot/paint/clear", {
+        method: "POST",
+        headers: {
+          "X-API-Key": "local-dev-key",
+        },
+      });
+
+      if (response.ok) {
+        setPaintBits(new Array(28 * 14).fill(0));
+        setStatusMessage({
+          type: "success",
+          text: "Paint canvas cleared",
+        });
+      } else {
+        const result = await response.json();
+        setStatusMessage({
+          type: "error",
+          text: result.error || "Failed to clear paint",
+        });
+      }
+    } catch (error) {
+      setStatusMessage({
+        type: "error",
+        text: "Network error: " + (error as Error).message,
+      });
+    }
+  };
+
   return (
     <div style={{ padding: "2rem", maxWidth: "1200px", margin: "0 auto" }}>
       <header style={{ textAlign: "center", marginBottom: "2rem" }}>
@@ -251,13 +424,43 @@ function AuthenticatedApp() {
           },
         }}
       >
-        <Display bits={displayBits} isPolling={isPolling} />
+        <div>
+          <Display bits={displayBits} isPolling={isPolling} />
+          {isPaintMode && (
+            <div style={{ marginTop: "2rem" }}>
+              <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>
+                Paint Canvas
+              </h2>
+              <PaintCanvas
+                initialBits={paintBits}
+                onPaint={handlePaint}
+                disabled={!isPageVisible}
+              />
+              {!isPageVisible && (
+                <div
+                  style={{
+                    marginTop: "1rem",
+                    padding: "0.75rem",
+                    backgroundColor: "#fef3c7",
+                    borderRadius: "4px",
+                    fontSize: "0.875rem",
+                    color: "#92400e",
+                  }}
+                >
+                  Tab is hidden - painting disabled, polling slowed
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <div>
           <ControlPanel
             onSendMessage={handleSendMessage}
             onClearAll={handleClearAll}
             onTogglePolling={() => setIsPolling(!isPolling)}
             isPolling={isPolling}
+            onTogglePaintMode={handleTogglePaintMode}
+            isPaintMode={isPaintMode}
           />
           {statusMessage && (
             <StatusMessage
