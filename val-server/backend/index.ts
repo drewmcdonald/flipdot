@@ -17,6 +17,10 @@ import {
   type CustomTextOptions,
 } from "./content/text.ts";
 import { AVAILABLE_FONTS, DEFAULT_FONT } from "./rendering/font-loader.ts";
+import { PatternStorage } from "./patterns/content.ts";
+import type { PatternConfig, TransitionConfig } from "./patterns/types.ts";
+import { createBlankFrame, renderTransition } from "./patterns/render.ts";
+import type { Content } from "../shared/types.ts";
 import { serveFile } from "https://esm.town/v/std/utils@85-main/index.ts";
 
 // Initialize Hono app
@@ -24,6 +28,9 @@ const app = new Hono<{ Variables: { authenticated: boolean } }>();
 
 // Initialize content router
 const router = new ContentRouter();
+
+// Initialize pattern storage
+const patternStorage = new PatternStorage();
 
 // Register default content sources
 router.registerSource(createClockSource());
@@ -177,6 +184,362 @@ app.post("/api/flipdot/clear", bearerAuthMiddleware, (c) => {
 });
 
 /**
+ * POST /api/flipdot/pattern
+ * Submit a pattern animation
+ */
+app.post("/api/flipdot/pattern", bearerAuthMiddleware, async (c) => {
+  try {
+    const body = await c.req.json();
+
+    // Validate pattern type
+    if (!body.type || typeof body.type !== "string") {
+      return c.json({ error: "Missing or invalid 'type' field" }, 400);
+    }
+
+    // Valid pattern types
+    const validTypes = [
+      "wave",
+      "rain",
+      "spiral",
+      "checkerboard",
+      "random",
+      "expand",
+      "gameoflife",
+      "matrix",
+      "sparkle",
+      "pulse",
+      "scan",
+      "fire",
+      "snake",
+    ];
+
+    if (!validTypes.includes(body.type)) {
+      return c.json({
+        error: `Invalid pattern type. Valid types: ${validTypes.join(", ")}`,
+      }, 400);
+    }
+
+    // Build pattern config
+    const config: PatternConfig = {
+      type: body.type,
+      duration_ms: body.duration_ms ?? 3000,
+      frame_delay_ms: body.frame_delay_ms ?? 100,
+      options: body.options ?? {},
+    };
+
+    // Validate durations
+    if (config.duration_ms! < 100 || config.duration_ms! > 60000) {
+      return c.json(
+        { error: "duration_ms must be between 100ms and 60000ms" },
+        400,
+      );
+    }
+
+    if (config.frame_delay_ms! < 20 || config.frame_delay_ms! > 1000) {
+      return c.json(
+        { error: "frame_delay_ms must be between 20ms and 1000ms" },
+        400,
+      );
+    }
+
+    // Create pattern source
+    const priority = body.priority ?? 15;
+    const ttl_ms = body.ttl_ms ?? 30000;
+    const interruptible = body.interruptible ?? true;
+
+    // Validate priority range
+    if (priority < 0 || priority > 99) {
+      return c.json({ error: "Priority must be between 0 and 99" }, 400);
+    }
+
+    // Validate TTL range
+    if (ttl_ms < 1000 || ttl_ms > 3600000) {
+      return c.json(
+        { error: "TTL must be between 1000ms and 3600000ms" },
+        400,
+      );
+    }
+
+    const source = patternStorage.set(config, {
+      priority,
+      ttl_ms,
+      interruptible,
+    });
+    router.registerSource(source);
+
+    return c.json({
+      success: true,
+      message: "Pattern registered",
+      source_id: source.id,
+      type: source.type,
+      pattern_type: config.type,
+      priority: source.priority,
+      ttl_ms: source.ttl_ms,
+      expires_at: new Date(Date.now() + source.ttl_ms).toISOString(),
+    });
+  } catch (error) {
+    console.error("Error handling pattern submission:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+/**
+ * POST /api/flipdot/pattern/clear
+ * Clear all patterns
+ */
+app.post("/api/flipdot/pattern/clear", bearerAuthMiddleware, (c) => {
+  try {
+    // Get all pattern sources
+    const sources = router.getSources();
+    const patternSources = sources.filter((s) => s.type === "pattern");
+
+    // Clear each pattern source
+    for (const source of patternSources) {
+      router.unregisterSource(source.id);
+    }
+
+    // Clear pattern storage
+    patternStorage.clear();
+
+    return c.json({
+      success: true,
+      message: "All patterns cleared",
+      cleared_count: patternSources.length,
+    });
+  } catch (error) {
+    console.error("Error clearing patterns:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+/**
+ * GET /api/flipdot/patterns/list
+ * List available pattern types
+ */
+app.get("/api/flipdot/patterns/list", bearerAuthMiddleware, (c) => {
+  const patterns = [
+    {
+      type: "wave",
+      description: "Horizontal or vertical sine wave",
+      options: {
+        vertical: "boolean",
+        amplitude: "number",
+        frequency: "number",
+        speed: "number",
+      },
+    },
+    {
+      type: "rain",
+      description: "Falling dots",
+      options: { density: "number (0-1)", speed: "number" },
+    },
+    {
+      type: "spiral",
+      description: "Spiral from center",
+      options: { speed: "number", arms: "number" },
+    },
+    {
+      type: "checkerboard",
+      description: "Animated checkerboard",
+      options: { size: "number" },
+    },
+    {
+      type: "random",
+      description: "Random noise",
+      options: { density: "number (0-1)" },
+    },
+    {
+      type: "expand",
+      description: "Expanding circles or squares",
+      options: { speed: "number", shape: "'circle' | 'square'" },
+    },
+    {
+      type: "gameoflife",
+      description: "Conway's Game of Life",
+      options: { density: "number (0-1)", seed: "number" },
+    },
+    {
+      type: "matrix",
+      description: "Matrix-style falling characters",
+      options: { density: "number (0-1)", speed: "number" },
+    },
+    {
+      type: "sparkle",
+      description: "Random sparkles",
+      options: { density: "number (0-1)" },
+    },
+    {
+      type: "pulse",
+      description: "Pulsing effect from center",
+      options: { speed: "number" },
+    },
+    {
+      type: "scan",
+      description: "Scanner effect (back and forth)",
+      options: { vertical: "boolean", speed: "number" },
+    },
+    {
+      type: "fire",
+      description: "Fire effect from bottom",
+      options: { intensity: "number (0-1)" },
+    },
+    {
+      type: "snake",
+      description: "Snake/worm moving around",
+      options: { length: "number", speed: "number" },
+    },
+  ];
+
+  return c.json({
+    patterns,
+    active_patterns: patternStorage.size,
+  });
+});
+
+/**
+ * GET /api/flipdot/transitions/list
+ * List available transition types
+ */
+app.get("/api/flipdot/transitions/list", bearerAuthMiddleware, (c) => {
+  const transitions = [
+    {
+      type: "wipe",
+      description: "Wipe from one direction",
+      options: { direction: "'left' | 'right' | 'up' | 'down'" },
+    },
+    { type: "fade", description: "Dithered fade for binary display" },
+    {
+      type: "dissolve",
+      description: "Random pixel dissolve",
+      options: { seed: "number" },
+    },
+    {
+      type: "slide",
+      description: "Slide in from direction",
+      options: { direction: "'left' | 'right' | 'up' | 'down'" },
+    },
+    {
+      type: "checkerboard",
+      description: "Checkerboard pattern reveal",
+      options: { size: "number" },
+    },
+    {
+      type: "blinds",
+      description: "Venetian blinds effect",
+      options: { vertical: "boolean", blindSize: "number" },
+    },
+    { type: "center_out", description: "Expand from center" },
+    { type: "corners", description: "Reveal from corners" },
+    { type: "spiral", description: "Spiral transition from center" },
+  ];
+
+  return c.json({
+    transitions,
+  });
+});
+
+/**
+ * POST /api/flipdot/transition
+ * Create a transition animation between two states
+ * This can be used as a standalone content item or to preview transitions
+ */
+app.post("/api/flipdot/transition", bearerAuthMiddleware, async (c) => {
+  try {
+    const body = await c.req.json();
+
+    // Validate transition type
+    if (!body.type || typeof body.type !== "string") {
+      return c.json({ error: "Missing or invalid 'type' field" }, 400);
+    }
+
+    // Valid transition types
+    const validTypes = [
+      "wipe",
+      "fade",
+      "dissolve",
+      "slide",
+      "checkerboard",
+      "blinds",
+      "center_out",
+      "corners",
+      "spiral",
+    ];
+
+    if (!validTypes.includes(body.type)) {
+      return c.json({
+        error: `Invalid transition type. Valid types: ${validTypes.join(", ")}`,
+      }, 400);
+    }
+
+    // Build transition config
+    const config: TransitionConfig = {
+      type: body.type,
+      duration_ms: body.duration_ms ?? 1000,
+      frame_delay_ms: body.frame_delay_ms ?? 50,
+      direction: body.direction,
+    };
+
+    // Validate durations
+    if (config.duration_ms! < 100 || config.duration_ms! > 10000) {
+      return c.json(
+        { error: "duration_ms must be between 100ms and 10000ms" },
+        400,
+      );
+    }
+
+    if (config.frame_delay_ms! < 20 || config.frame_delay_ms! > 500) {
+      return c.json(
+        { error: "frame_delay_ms must be between 20ms and 500ms" },
+        400,
+      );
+    }
+
+    // For now, create a transition from blank to filled
+    // In the future, could accept fromFrame and toFrame in the request
+    const fromFrame = createBlankFrame();
+    const toFrame = createBlankFrame();
+
+    // Create a simple pattern for toFrame (all on)
+    const bits = new Array(28 * 14).fill(1);
+    const packed = new Uint8Array(Math.ceil(bits.length / 8));
+    for (let i = 0; i < bits.length; i++) {
+      if (bits[i]) {
+        const byteIndex = Math.floor(i / 8);
+        const bitIndex = i % 8;
+        packed[byteIndex] |= 1 << bitIndex;
+      }
+    }
+    toFrame.data_b64 = btoa(String.fromCharCode(...packed));
+
+    const result = renderTransition(fromFrame, toFrame, config);
+
+    // Return as a content response (not registered as a source)
+    const content: Content = {
+      content_id: `transition:${config.type}:${Date.now()}`,
+      frames: result.frames,
+      playback: {
+        loop: false,
+      },
+      metadata: {
+        type: "transition",
+        transition_type: config.type,
+        config,
+      },
+    };
+
+    return c.json({
+      success: true,
+      message: "Transition animation created",
+      content,
+      frame_count: result.frames.length,
+    });
+  } catch (error) {
+    console.error("Error handling transition request:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+/**
  * POST /api/auth/login
  * Login with password
  */
@@ -248,11 +611,62 @@ app.get("/", async (c) => {
     // Fallback to JSON API info
     return c.json({
       name: "FlipDot Content Server",
-      version: "2.0",
+      version: "2.1",
       endpoints: [
-        { path: "/api/flipdot/content", method: "GET", auth: "required" },
-        { path: "/api/flipdot/text", method: "POST", auth: "required" },
-        { path: "/health", method: "GET", auth: "none" },
+        {
+          path: "/api/flipdot/content",
+          method: "GET",
+          auth: "required",
+          description: "Get current content playlist",
+        },
+        {
+          path: "/api/flipdot/text",
+          method: "POST",
+          auth: "required",
+          description: "Submit text message",
+        },
+        {
+          path: "/api/flipdot/clear",
+          method: "POST",
+          auth: "required",
+          description: "Clear all custom content",
+        },
+        {
+          path: "/api/flipdot/pattern",
+          method: "POST",
+          auth: "required",
+          description: "Submit pattern animation",
+        },
+        {
+          path: "/api/flipdot/pattern/clear",
+          method: "POST",
+          auth: "required",
+          description: "Clear all patterns",
+        },
+        {
+          path: "/api/flipdot/patterns/list",
+          method: "GET",
+          auth: "required",
+          description: "List available patterns",
+        },
+        {
+          path: "/api/flipdot/transition",
+          method: "POST",
+          auth: "required",
+          description: "Create transition animation",
+        },
+        {
+          path: "/api/flipdot/transitions/list",
+          method: "GET",
+          auth: "required",
+          description: "List available transitions",
+        },
+        {
+          path: "/health",
+          method: "GET",
+          auth: "none",
+          description: "Health check",
+        },
       ],
     });
   }
