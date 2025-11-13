@@ -540,6 +540,103 @@ app.post("/api/flipdot/transition", bearerAuthMiddleware, async (c) => {
 });
 
 /**
+ * POST /api/flipdot/playlist
+ * Submit a playlist of multiple items (text, patterns, transitions)
+ */
+app.post("/api/flipdot/playlist", bearerAuthMiddleware, async (c) => {
+  try {
+    const body = await c.req.json();
+
+    if (!body.items || !Array.isArray(body.items)) {
+      return c.json({ error: "Missing or invalid 'items' field" }, 400);
+    }
+
+    if (body.items.length === 0) {
+      return c.json({ error: "Playlist must contain at least one item" }, 400);
+    }
+
+    if (body.items.length > 50) {
+      return c.json(
+        { error: "Playlist cannot contain more than 50 items" },
+        400,
+      );
+    }
+
+    // Clear existing custom content (optionally keep clock)
+    const keepClock = body.keep_clock !== false;
+    const sources = router.getSources();
+    const customSources = sources.filter((s) =>
+      keepClock ? s.type !== "clock" : true
+    );
+
+    for (const source of customSources) {
+      router.unregisterSource(source.id);
+    }
+    patternStorage.clear();
+
+    // Register each item as a content source
+    const registeredItems: any[] = [];
+
+    for (const item of body.items) {
+      try {
+        let source;
+
+        if (item.type === "text") {
+          // Register text source
+          const options: CustomTextOptions = {
+            text: item.config.text.toUpperCase(),
+            priority: item.priority ?? 20,
+            ttl_ms: item.ttl_ms ?? 60000,
+            interruptible: true,
+            scroll: item.config.scroll ?? false,
+            frame_delay_ms: item.config.frame_delay_ms ?? 100,
+          };
+          source = createCustomTextSource(options);
+          router.registerSource(source);
+        } else if (item.type === "pattern") {
+          // Register pattern source
+          const config: PatternConfig = {
+            type: item.config.pattern_type,
+            duration_ms: item.config.duration_ms ?? 3000,
+            frame_delay_ms: item.config.frame_delay_ms ?? 100,
+            options: item.config.options ?? {},
+          };
+          source = patternStorage.set(config, {
+            priority: item.priority ?? 15,
+            ttl_ms: item.ttl_ms ?? 30000,
+            interruptible: true,
+          });
+          router.registerSource(source);
+        } else if (item.type === "transition") {
+          // Transitions are more complex - for now, skip or handle differently
+          // Could be rendered as a one-time pattern
+          continue;
+        }
+
+        registeredItems.push({
+          id: source.id,
+          type: item.type,
+          priority: source.priority,
+          ttl_ms: source.ttl_ms,
+        });
+      } catch (error) {
+        console.error(`Failed to register playlist item:`, error);
+        // Continue with other items
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: `Playlist registered with ${registeredItems.length} items`,
+      items: registeredItems,
+    });
+  } catch (error) {
+    console.error("Error handling playlist submission:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+
+/**
  * POST /api/auth/login
  * Login with password
  */
@@ -611,7 +708,7 @@ app.get("/", async (c) => {
     // Fallback to JSON API info
     return c.json({
       name: "FlipDot Content Server",
-      version: "2.1",
+      version: "2.2",
       endpoints: [
         {
           path: "/api/flipdot/content",
@@ -660,6 +757,12 @@ app.get("/", async (c) => {
           method: "GET",
           auth: "required",
           description: "List available transitions",
+        },
+        {
+          path: "/api/flipdot/playlist",
+          method: "POST",
+          auth: "required",
+          description: "Submit playlist of items",
         },
         {
           path: "/health",

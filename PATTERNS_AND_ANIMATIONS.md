@@ -10,11 +10,88 @@ The FlipDot server now supports sending fun patterns and animations to the displ
 
 - **13 Built-in Patterns**: Wave, rain, spiral, checkerboard, random, expand, Game of Life, Matrix, sparkle, pulse, scan, fire, and snake
 - **9 Transition Effects**: Wipe, fade, dissolve, slide, checkerboard, blinds, center-out, corners, and spiral
+- **Playlist Builder**: Web UI for creating sequences of text, patterns, and transitions
 - **Configurable Parameters**: Each pattern and transition supports various options to customize behavior
 - **Priority System**: Patterns integrate with the existing priority-based content system
 - **TTL Support**: Patterns automatically expire after a configurable time-to-live
 
 ## API Endpoints
+
+### Submit a Playlist
+
+```bash
+POST /api/flipdot/playlist
+```
+
+Submit a playlist containing multiple items (text, patterns, transitions) to display in sequence.
+
+**Request Body:**
+```json
+{
+  "items": [
+    {
+      "type": "text",
+      "priority": 30,
+      "ttl_ms": 60000,
+      "config": {
+        "text": "HELLO",
+        "scroll": false,
+        "frame_delay_ms": 100
+      }
+    },
+    {
+      "type": "pattern",
+      "priority": 25,
+      "ttl_ms": 30000,
+      "config": {
+        "pattern_type": "wave",
+        "duration_ms": 3000,
+        "frame_delay_ms": 100,
+        "options": {}
+      }
+    },
+    {
+      "type": "text",
+      "priority": 30,
+      "ttl_ms": 60000,
+      "config": {
+        "text": "WORLD",
+        "scroll": false
+      }
+    }
+  ],
+  "keep_clock": true
+}
+```
+
+**Parameters:**
+- `items` (required): Array of playlist items
+- `keep_clock` (optional): Whether to keep the clock running (default: true)
+
+Each item must have:
+- `type`: "text", "pattern", or "transition"
+- `priority`: Priority level 0-99
+- `ttl_ms`: Display duration in milliseconds
+- `config`: Type-specific configuration (see individual endpoints below)
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Playlist registered with 3 items",
+  "items": [
+    {
+      "id": "text:HELLO:abc123",
+      "type": "text",
+      "priority": 30,
+      "ttl_ms": 60000
+    },
+    ...
+  ]
+}
+```
+
+## API Endpoints (Individual Items)
 
 ### Submit a Pattern
 
@@ -429,17 +506,106 @@ val-server/backend/patterns/
 - Adjust `frame_delay_ms` to balance smoothness vs. bandwidth
 - Lower frame rates (higher delay) reduce network traffic
 
+## Web UI - Playlist Builder
+
+The FlipDot display now includes a web-based **Playlist Builder** that makes it easy to create and manage sequences of content without writing code or using curl commands.
+
+### Features
+
+- **Visual Playlist Editor**: Add, edit, remove, and reorder items with a simple UI
+- **Three Content Types**:
+  - Text messages (with scroll options)
+  - Pattern animations (13 types)
+  - Transitions (9 types)
+- **Drag-Free Reordering**: Use up/down arrows to reorder playlist items
+- **Priority Control**: Set priority for each item
+- **Duration Control**: Configure how long each item displays
+- **Pattern/Transition Selector**: Browse all available patterns and transitions with descriptions
+- **Expandable Details**: Click to view/hide full configuration of each item
+- **Live Preview**: See your playlist items displayed on the virtual flipdot
+
+### How to Use
+
+1. **Access the Web UI**: Navigate to your FlipDot server URL in a web browser
+2. **Add Items**: Click "+ Add Item" to open the item configuration modal
+3. **Choose Type**: Select Text, Pattern, or Transition
+4. **Configure**: Set all parameters (text, pattern type, priority, duration, etc.)
+5. **Add to List**: Click "Add" to add the item to your playlist
+6. **Reorder**: Use ↑ and ↓ buttons to reorder items
+7. **Edit/Delete**: Use ✎ to edit or ✕ to delete items
+8. **Send**: Click "Send Playlist" to submit to the display
+
+### Playlist Item Configuration
+
+**Text Items:**
+- Text content (up to 100 characters)
+- Scroll option (force scrolling even for short text)
+- Frame delay (animation speed)
+- Priority and display time
+
+**Pattern Items:**
+- Pattern type (wave, rain, spiral, etc.)
+- Duration (total animation time)
+- Frame delay (animation smoothness)
+- Pattern-specific options
+- Priority and display time
+
+**Transition Items:**
+- Transition type (wipe, fade, dissolve, etc.)
+- Duration (transition time)
+- Direction (for directional transitions)
+- Priority and display time
+
+### Tips for Creating Playlists
+
+1. **Use Priority Strategically**: Higher numbers display first
+   - Text: 30 (main content)
+   - Patterns: 25 (transitions)
+   - Clock: 10 (always visible when nothing else is active)
+
+2. **Balance Display Times**:
+   - Short text: 5-10 seconds
+   - Scrolling text: 10-30 seconds
+   - Patterns: 3-10 seconds
+   - Transitions: 1-2 seconds
+
+3. **Create Visual Flow**:
+   - Add patterns between text messages for visual interest
+   - Use transitions to smooth changes between content
+   - Vary pattern types to keep the display engaging
+
+4. **Example Sequence**:
+   ```
+   1. Text: "HELLO" (30s, priority 30)
+   2. Pattern: Wave (3s, priority 25)
+   3. Text: "WORLD" (30s, priority 30)
+   4. Pattern: Matrix (5s, priority 25)
+   5. Text: "GOODBYE" (30s, priority 30)
+   ```
+
+### Playlist Behavior
+
+- Items are registered with the server when you click "Send Playlist"
+- The server sorts items by priority (highest first)
+- Items with the same priority play in order
+- Each item displays for its TTL duration, then expires
+- The clock (priority 10) displays when no higher priority content is active
+- You can send a new playlist at any time to replace the current one
+
 ## Future Enhancements
 
 Possible future improvements:
 
-- Custom pattern parameters in web UI
+- Save/load playlist templates
 - Pattern presets/favorites
+- Drag-and-drop reordering
+- Real-time pattern preview
 - Automatic transitions between content items
 - Pattern chaining (combine multiple patterns)
 - User-uploaded custom patterns
-- Real-time pattern editing
 - Pattern scheduling (time-based patterns)
+- Loop count for patterns
+- Playlist repeat mode
 
 ## Troubleshooting
 

@@ -2,9 +2,11 @@
 import React, { useEffect, useState } from "https://esm.sh/react@18.2.0";
 import { Display } from "./components/Display.tsx";
 import { ControlPanel } from "./components/ControlPanel.tsx";
+import { PlaylistBuilder } from "./components/PlaylistBuilder.tsx";
 import { StatusMessage } from "./components/StatusMessage.tsx";
 import { LoginForm } from "./components/LoginForm.tsx";
 import { useAuthCheck } from "./hooks/useAuth.ts";
+import type { PlaylistItem } from "./types/playlist.ts";
 
 export function App() {
   const { data: authenticated, isLoading, refetch } = useAuthCheck();
@@ -231,6 +233,41 @@ function AuthenticatedApp() {
     }
   };
 
+  const handleSubmitPlaylist = async (items: PlaylistItem[]) => {
+    try {
+      const response = await fetch("/api/flipdot/playlist", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": "local-dev-key",
+        },
+        body: JSON.stringify({
+          items,
+          keep_clock: true,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setStatusMessage({
+          type: "success",
+          text: `Playlist sent! ${result.items?.length || 0} items registered`,
+        });
+      } else {
+        setStatusMessage({
+          type: "error",
+          text: result.error || "Failed to send playlist",
+        });
+      }
+    } catch (error) {
+      setStatusMessage({
+        type: "error",
+        text: "Network error: " + (error as Error).message,
+      });
+    }
+  };
+
   return (
     <div style={{ padding: "2rem", maxWidth: "1200px", margin: "0 auto" }}>
       <header style={{ textAlign: "center", marginBottom: "2rem" }}>
@@ -238,7 +275,7 @@ function AuthenticatedApp() {
           FlipDot Display Control
         </h1>
         <p style={{ color: "#6b7280", margin: 0 }}>
-          28×14 Pixel Display Simulator
+          28×14 Pixel Display with Patterns & Animations
         </p>
       </header>
 
@@ -254,13 +291,14 @@ function AuthenticatedApp() {
         }}
       >
         <Display bits={displayBits} isPolling={isPolling} />
-        <div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           <ControlPanel
             onSendMessage={handleSendMessage}
             onClearAll={handleClearAll}
             onTogglePolling={() => setIsPolling(!isPolling)}
             isPolling={isPolling}
           />
+          <PlaylistBuilder onSubmitPlaylist={handleSubmitPlaylist} />
           {statusMessage && (
             <StatusMessage
               type={statusMessage.type}
@@ -282,12 +320,20 @@ function AuthenticatedApp() {
         }}
       >
         <p>
-          Content Server v2.0 |{" "}
+          Content Server v2.2 |{" "}
           <a
             href="/api/flipdot/content"
             style={{ color: "#3b82f6", textDecoration: "none" }}
           >
             View API
+          </a>
+          {" | "}
+          <a
+            href="/PATTERNS_AND_ANIMATIONS.md"
+            style={{ color: "#3b82f6", textDecoration: "none" }}
+            target="_blank"
+          >
+            Documentation
           </a>
         </p>
       </footer>
