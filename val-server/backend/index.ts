@@ -40,21 +40,26 @@ app.get("/api/flipdot/content", bearerAuthMiddleware, async (c) => {
     // Generate playlist from all sources (ordered by priority)
     const playlist = await router.generatePlaylist();
 
+    // Calculate optimal poll interval based on next expiration
+    const poll_interval_ms = router.getOptimalPollInterval(
+      DEFAULT_POLL_INTERVAL_MS,
+    );
+
     if (playlist.length === 0) {
       // No content available - return "clear" status
       const response: ContentResponse = {
         status: "clear",
         playlist: [],
-        poll_interval_ms: DEFAULT_POLL_INTERVAL_MS,
+        poll_interval_ms: DEFAULT_POLL_INTERVAL_MS, // Use default when no content
       };
       return c.json(response);
     }
 
-    // Return complete playlist
+    // Return complete playlist with dynamic poll interval
     const response: ContentResponse = {
       status: "updated",
       playlist: playlist,
-      poll_interval_ms: DEFAULT_POLL_INTERVAL_MS,
+      poll_interval_ms: poll_interval_ms, // Tell driver when to check back
     };
 
     return c.json(response);
@@ -99,10 +104,11 @@ app.post("/api/flipdot/text", bearerAuthMiddleware, async (c) => {
     }
 
     // Create custom text source with provided options
+    const ttl_ms = body.ttl_ms ?? 60000; // Default 1 minute
     const options: CustomTextOptions = {
       text: body.text.toUpperCase(),
       priority: body.priority ?? 20, // Default higher than clock
-      ttl_ms: body.ttl_ms ?? 60000, // Default 1 minute
+      ttl_ms: ttl_ms,
       interruptible: body.interruptible ?? true,
       scroll: body.scroll ?? false,
       frame_delay_ms: body.frame_delay_ms ?? 100,
@@ -115,7 +121,7 @@ app.post("/api/flipdot/text", bearerAuthMiddleware, async (c) => {
     }
 
     // Validate TTL range
-    if (options.ttl_ms! < 1000 || options.ttl_ms! > 3600000) {
+    if (ttl_ms < 1000 || ttl_ms > 3600000) {
       return c.json(
         { error: "TTL must be between 1000ms and 3600000ms" },
         400,
@@ -123,7 +129,9 @@ app.post("/api/flipdot/text", bearerAuthMiddleware, async (c) => {
     }
 
     // Create and register the source
-    const source = createCustomTextSource(options);
+    // Set expiration time = now + ttl_ms
+    const expires_at = Date.now() + ttl_ms;
+    const source = createCustomTextSource(options, expires_at);
     router.registerSource(source);
 
     return c.json({

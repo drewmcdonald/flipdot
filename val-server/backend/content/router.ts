@@ -113,17 +113,33 @@ export class ContentRouter {
 
   /**
    * Generate complete playlist from all sources ordered by priority
+   * Automatically removes expired sources
    */
   async generatePlaylist(): Promise<Content[]> {
+    const now = Date.now();
     const sources = this.getSources();
 
-    if (sources.length === 0) {
+    // Remove expired sources
+    const expiredSources = sources.filter(
+      (s) => s.expires_at !== undefined && s.expires_at < now,
+    );
+    for (const source of expiredSources) {
+      console.log(
+        `Removing expired source: ${source.id} (expired at ${new Date(source.expires_at!).toISOString()})`,
+      );
+      this.unregisterSource(source.id);
+    }
+
+    // Get remaining sources
+    const activeSources = this.getSources();
+
+    if (activeSources.length === 0) {
       console.warn("No content sources registered");
       return [];
     }
 
-    // Get content from all sources
-    const contentPromises = sources.map(async (source) => {
+    // Get content from all active sources
+    const contentPromises = activeSources.map(async (source) => {
       const content = await this.getSourceContent(source);
       return { source, content };
     });
@@ -206,5 +222,38 @@ export class ContentRouter {
     } catch (error) {
       console.error("Error saving last content ID:", error);
     }
+  }
+
+  /**
+   * Calculate optimal poll interval based on next expiration time
+   * Returns milliseconds until the next source expires, or default interval
+   */
+  getOptimalPollInterval(defaultInterval: number = 30000): number {
+    const now = Date.now();
+    const sources = this.getSources();
+
+    // Find the soonest expiration time among all sources
+    const expiringTimes = sources
+      .filter((s) => s.expires_at !== undefined)
+      .map((s) => s.expires_at!);
+
+    if (expiringTimes.length === 0) {
+      // No expiring sources, use default interval
+      return defaultInterval;
+    }
+
+    const nextExpiration = Math.min(...expiringTimes);
+    const timeUntilExpiration = nextExpiration - now;
+
+    // If expiration is in the past or very soon, poll again quickly
+    if (timeUntilExpiration <= 0) {
+      return 1000; // 1 second (minimum)
+    }
+
+    // Add a small buffer (1 second) to ensure we poll after expiration
+    const pollInterval = timeUntilExpiration + 1000;
+
+    // Cap at default interval (don't poll less frequently than default)
+    return Math.min(pollInterval, defaultInterval);
   }
 }

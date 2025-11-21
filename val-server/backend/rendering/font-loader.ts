@@ -3,9 +3,6 @@
  * Loads fonts from the Python driver's rendered font files
  */
 
-import * as fs from "fs";
-import * as path from "path";
-
 /**
  * Font metadata and glyph data
  */
@@ -32,8 +29,9 @@ export const DISPLAY_BASELINE = 11;
 
 /**
  * Available font names
+ * Note: hanover_6x13m font is too large for Val Town file limits (101K)
  */
-export const AVAILABLE_FONTS = ["axion_6x7", "cg_pixel_4x5", "hanover_6x13m"];
+export const AVAILABLE_FONTS = ["axion_6x7", "cg_pixel_4x5"];
 
 /**
  * Default font name
@@ -42,8 +40,9 @@ export const DEFAULT_FONT = "axion_6x7";
 
 /**
  * Load a font from JSON file
+ * Works in both local dev (using Deno.readTextFile) and Val Town (using readFile utility)
  */
-export function loadFont(fontName: string): FontData {
+export async function loadFont(fontName: string): Promise<FontData> {
   // Check cache first
   if (fontCache.has(fontName)) {
     return fontCache.get(fontName)!;
@@ -56,45 +55,50 @@ export function loadFont(fontName: string): FontData {
     );
   }
 
-  // Load from file
-  const fontPath = path.join(
-    __dirname,
-    "..",
-    "..",
-    "..",
-    "flipdot",
-    "font",
-    "rendered",
-    `${fontName}.json`,
-  );
+  try {
+    let fontContent: string;
 
-  if (!fs.existsSync(fontPath)) {
-    throw new Error(`Font file not found: ${fontPath}`);
+    // Determine if we're running locally or on Val Town
+    const isLocal = import.meta.url.startsWith("file://");
+
+    if (isLocal) {
+      // Local development: use Deno's file system APIs
+      const currentDir = new URL(".", import.meta.url).pathname;
+      const fontPath = `${currentDir}../../fonts/${fontName}.json`;
+      fontContent = await Deno.readTextFile(fontPath);
+    } else {
+      // Val Town: use readFile utility
+      const { readFile } = await import("https://esm.town/v/std/utils@85-main/index.ts");
+      const fontPath = `/fonts/${fontName}.json`;
+      fontContent = await readFile(fontPath, import.meta.url);
+    }
+
+    const fontData = JSON.parse(fontContent) as FontData;
+
+    // Cache the font
+    fontCache.set(fontName, fontData);
+
+    return fontData;
+  } catch (error) {
+    throw new Error(`Failed to load font ${fontName}: ${error}`);
   }
-
-  const fontData = JSON.parse(fs.readFileSync(fontPath, "utf-8")) as FontData;
-
-  // Cache the font
-  fontCache.set(fontName, fontData);
-
-  return fontData;
 }
 
 /**
  * Get a font, loading it if necessary
  * Returns default font if requested font is not available
  */
-export function getFont(fontName?: string): FontData {
+export async function getFont(fontName?: string): Promise<FontData> {
   const name = fontName || DEFAULT_FONT;
 
   try {
-    return loadFont(name);
+    return await loadFont(name);
   } catch (error) {
     console.warn(
       `Failed to load font ${name}, falling back to ${DEFAULT_FONT}:`,
       error,
     );
-    return loadFont(DEFAULT_FONT);
+    return await loadFont(DEFAULT_FONT);
   }
 }
 

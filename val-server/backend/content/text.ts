@@ -64,7 +64,7 @@ export async function generateTextContent(
   fontName: string = DEFAULT_FONT,
 ): Promise<Content> {
   // Load the font
-  const font = getFont(fontName);
+  const font = await getFont(fontName);
 
   // Render text to bits
   const bits = renderText(font, text, DISPLAY_WIDTH, DISPLAY_HEIGHT);
@@ -100,7 +100,7 @@ export async function generateScrollingTextContent(
   fontName: string = DEFAULT_FONT,
 ): Promise<Content> {
   // Load the font
-  const font = getFont(fontName);
+  const font = await getFont(fontName);
 
   // Generate scrolling frames
   const scrollFrames = renderScrollingText(
@@ -162,6 +162,7 @@ export interface CustomTextOptions {
 
 export function createCustomTextSource(
   options: CustomTextOptions,
+  expires_at?: number,
 ): ContentSource {
   const {
     text,
@@ -173,21 +174,22 @@ export function createCustomTextSource(
     font = DEFAULT_FONT,
   } = options;
 
-  // Load the font to measure text
-  const fontData = getFont(font);
-
-  // Determine if text needs to scroll
-  const textWidth = measureText(fontData, text);
-  const shouldScroll = scroll || textWidth > DISPLAY_WIDTH;
-
   return {
     id: `custom_text:${hashText(text)}:${Date.now()}`,
-    type: shouldScroll ? "scrolling_text" : "custom_text",
+    type: scroll ? "scrolling_text" : "custom_text",
     priority,
     interruptible,
     ttl_ms,
-    generate: () =>
-      shouldScroll
+    expires_at, // Set expiration timestamp (undefined means no expiration)
+    generate: async () => {
+      // Load the font to measure text (async)
+      const fontData = await getFont(font);
+
+      // Determine if text needs to scroll
+      const textWidth = measureText(fontData, text);
+      const shouldScroll = scroll || textWidth > DISPLAY_WIDTH;
+
+      return shouldScroll
         ? generateScrollingTextContent(
           text,
           priority,
@@ -195,6 +197,7 @@ export function createCustomTextSource(
           frame_delay_ms,
           font,
         )
-        : generateTextContent(text, priority, interruptible, font),
+        : generateTextContent(text, priority, interruptible, font);
+    },
   };
 }

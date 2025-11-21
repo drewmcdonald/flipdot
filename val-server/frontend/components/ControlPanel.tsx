@@ -116,8 +116,7 @@ export function ControlPanel({
             }}
           >
             <option value="axion_6x7">Axion 6x7 (default)</option>
-            <option value="cg_pixel_4x5">CG Pixel 4x5</option>
-            <option value="hanover_6x13m">Hanover 6x13m</option>
+            <option value="cg_pixel_4x5">CG Pixel 4x5 (compact)</option>
           </select>
         </div>
 

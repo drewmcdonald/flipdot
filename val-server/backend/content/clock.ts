@@ -40,8 +40,11 @@ export function getClockCacheKey(hour: number, minute: number, fontName: string)
  */
 export async function generateClockContent(fontName: string = DEFAULT_FONT): Promise<Content> {
   const now = new Date();
-  const hour = now.getHours();
-  const minute = now.getMinutes();
+
+  // Get Eastern time (America/New_York - handles EST/EDT automatically)
+  const easternTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const hour = easternTime.getHours();
+  const minute = easternTime.getMinutes();
 
   // Format time as "HH:MM"
   const hourStr = hour.toString().padStart(2, "0");
@@ -49,7 +52,7 @@ export async function generateClockContent(fontName: string = DEFAULT_FONT): Pro
   const timeText = `${hourStr}:${minuteStr}`;
 
   // Load the font
-  const font = getFont(fontName);
+  const font = await getFont(fontName);
 
   // Render text to bits
   const bits = renderText(font, timeText, DISPLAY_WIDTH, DISPLAY_HEIGHT);
