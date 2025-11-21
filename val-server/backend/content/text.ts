@@ -11,11 +11,12 @@ import {
   DISPLAY_WIDTH,
 } from "../rendering/frame.ts";
 import {
-  getFontName,
+  getFont,
   measureText,
   renderScrollingText,
   renderText,
-} from "../rendering/font.ts";
+  DEFAULT_FONT,
+} from "../rendering/font-loader.ts";
 
 // Text configuration
 const TEXT_PRIORITY = 15;
@@ -38,8 +39,7 @@ function hashText(text: string): string {
 /**
  * Generate content ID for text
  */
-function getTextContentId(text: string): string {
-  const fontName = getFontName();
+function getTextContentId(text: string, fontName: string): string {
   const hash = hashText(text);
   return `text:${fontName}:${hash}`;
 }
@@ -47,8 +47,7 @@ function getTextContentId(text: string): string {
 /**
  * Get cache key for text content
  */
-export function getTextCacheKey(text: string): string {
-  const fontName = getFontName();
+export function getTextCacheKey(text: string, fontName: string): string {
   const hash = hashText(text);
   return `flipdot:text:${fontName}:${hash}`;
 }
@@ -62,15 +61,19 @@ export async function generateTextContent(
   text: string,
   priority: number = TEXT_PRIORITY,
   interruptible: boolean = TEXT_INTERRUPTIBLE,
+  fontName: string = DEFAULT_FONT,
 ): Promise<Content> {
+  // Load the font
+  const font = await getFont(fontName);
+
   // Render text to bits
-  const bits = renderText(text, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+  const bits = renderText(font, text, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
   // Create frame
   const frame = createFrame(bits);
 
   return {
-    content_id: getTextContentId(text),
+    content_id: getTextContentId(text, fontName),
     frames: [frame],
     playback: {
       loop: false,
@@ -78,6 +81,7 @@ export async function generateTextContent(
     metadata: {
       type: "text",
       text: text,
+      font: fontName,
       timestamp: new Date().toISOString(),
     },
   };
@@ -93,9 +97,14 @@ export async function generateScrollingTextContent(
   priority: number = TEXT_PRIORITY,
   interruptible: boolean = TEXT_INTERRUPTIBLE,
   frameDelayMs: number = 100,
+  fontName: string = DEFAULT_FONT,
 ): Promise<Content> {
+  // Load the font
+  const font = await getFont(fontName);
+
   // Generate scrolling frames
   const scrollFrames = renderScrollingText(
+    font,
     text,
     DISPLAY_WIDTH,
     DISPLAY_HEIGHT,
@@ -108,7 +117,7 @@ export async function generateScrollingTextContent(
   );
 
   return {
-    content_id: `scroll:${getTextContentId(text)}`,
+    content_id: `scroll:${getTextContentId(text, fontName)}`,
     frames,
     playback: {
       loop: true, // Loop the scrolling animation
@@ -116,6 +125,7 @@ export async function generateScrollingTextContent(
     metadata: {
       type: "scrolling_text",
       text: text,
+      font: fontName,
       frame_delay_ms: frameDelayMs,
       frame_count: frames.length,
       timestamp: new Date().toISOString(),
@@ -147,10 +157,12 @@ export interface CustomTextOptions {
   interruptible?: boolean;
   scroll?: boolean;
   frame_delay_ms?: number;
+  font?: string;
 }
 
 export function createCustomTextSource(
   options: CustomTextOptions,
+  expires_at?: number,
 ): ContentSource {
   const {
     text,
@@ -159,26 +171,33 @@ export function createCustomTextSource(
     interruptible = TEXT_INTERRUPTIBLE,
     scroll = false,
     frame_delay_ms = 100,
+    font = DEFAULT_FONT,
   } = options;
-
-  // Determine if text needs to scroll
-  const textWidth = measureText(text);
-  const shouldScroll = scroll || textWidth > DISPLAY_WIDTH;
 
   return {
     id: `custom_text:${hashText(text)}:${Date.now()}`,
-    type: shouldScroll ? "scrolling_text" : "custom_text",
+    type: scroll ? "scrolling_text" : "custom_text",
     priority,
     interruptible,
     ttl_ms,
-    generate: () =>
-      shouldScroll
+    expires_at, // Set expiration timestamp (undefined means no expiration)
+    generate: async () => {
+      // Load the font to measure text (async)
+      const fontData = await getFont(font);
+
+      // Determine if text needs to scroll
+      const textWidth = measureText(fontData, text);
+      const shouldScroll = scroll || textWidth > DISPLAY_WIDTH;
+
+      return shouldScroll
         ? generateScrollingTextContent(
           text,
           priority,
           interruptible,
           frame_delay_ms,
+          font,
         )
-        : generateTextContent(text, priority, interruptible),
+        : generateTextContent(text, priority, interruptible, font);
+    },
   };
 }

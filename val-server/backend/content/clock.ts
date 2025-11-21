@@ -10,7 +10,7 @@ import {
   DISPLAY_HEIGHT,
   DISPLAY_WIDTH,
 } from "../rendering/frame.ts";
-import { getFontName, renderText } from "../rendering/font.ts";
+import { getFont, renderText, DEFAULT_FONT } from "../rendering/font-loader.ts";
 
 // Clock configuration
 const CLOCK_PRIORITY = 10;
@@ -20,8 +20,7 @@ const CLOCK_INTERRUPTIBLE = true;
 /**
  * Generate content ID for clock based on current time
  */
-function getClockContentId(hour: number, minute: number): string {
-  const fontName = getFontName();
+function getClockContentId(hour: number, minute: number, fontName: string): string {
   const hourStr = hour.toString().padStart(2, "0");
   const minuteStr = minute.toString().padStart(2, "0");
   return `clock:${fontName}:${hourStr}:${minuteStr}`;
@@ -30,8 +29,7 @@ function getClockContentId(hour: number, minute: number): string {
 /**
  * Get cache key for clock content
  */
-export function getClockCacheKey(hour: number, minute: number): string {
-  const fontName = getFontName();
+export function getClockCacheKey(hour: number, minute: number, fontName: string): string {
   const hourStr = hour.toString().padStart(2, "0");
   const minuteStr = minute.toString().padStart(2, "0");
   return `flipdot:clock:${fontName}:${hourStr}:${minuteStr}`;
@@ -40,24 +38,30 @@ export function getClockCacheKey(hour: number, minute: number): string {
 /**
  * Generate clock content
  */
-export async function generateClockContent(): Promise<Content> {
+export async function generateClockContent(fontName: string = DEFAULT_FONT): Promise<Content> {
   const now = new Date();
-  const hour = now.getHours();
-  const minute = now.getMinutes();
+
+  // Get Eastern time (America/New_York - handles EST/EDT automatically)
+  const easternTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const hour = easternTime.getHours();
+  const minute = easternTime.getMinutes();
 
   // Format time as "HH:MM"
   const hourStr = hour.toString().padStart(2, "0");
   const minuteStr = minute.toString().padStart(2, "0");
   const timeText = `${hourStr}:${minuteStr}`;
 
+  // Load the font
+  const font = await getFont(fontName);
+
   // Render text to bits
-  const bits = renderText(timeText, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+  const bits = renderText(font, timeText, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
   // Create frame
   const frame = createFrame(bits);
 
   return {
-    content_id: getClockContentId(hour, minute),
+    content_id: getClockContentId(hour, minute, fontName),
     frames: [frame],
     playback: {
       loop: false,
@@ -65,6 +69,7 @@ export async function generateClockContent(): Promise<Content> {
     metadata: {
       type: "clock",
       time: timeText,
+      font: fontName,
       timestamp: now.toISOString(),
     },
   };
@@ -73,13 +78,13 @@ export async function generateClockContent(): Promise<Content> {
 /**
  * Create clock content source
  */
-export function createClockSource(): ContentSource {
+export function createClockSource(fontName: string = DEFAULT_FONT): ContentSource {
   return {
     id: "clock",
     type: "clock",
     priority: CLOCK_PRIORITY,
     interruptible: CLOCK_INTERRUPTIBLE,
     ttl_ms: CLOCK_TTL_MS,
-    generate: generateClockContent,
+    generate: () => generateClockContent(fontName),
   };
 }

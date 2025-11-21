@@ -22,6 +22,7 @@ watchfiles = "^1.0.4"
 pytest = "^8.4.2"
 basedpyright = "^1.32.1"
 freetype-py = "^2.5.1"
+freetype-py-stubs = "^2.5.1"
 
 [build-system]
 requires = ["poetry-core"]
@@ -54,3 +55,10 @@ lint.ignore = []
 [tool.basedpyright]
 ignore = ['graveyard', 'flipdot/tests']
 reportImplicitStringConcatenation = false
+
+[[tool.basedpyright.executionEnvironments]]
+root = "flipdot/font"
+reportAny = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false

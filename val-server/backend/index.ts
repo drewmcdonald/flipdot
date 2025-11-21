@@ -16,6 +16,7 @@ import {
   createCustomTextSource,
   type CustomTextOptions,
 } from "./content/text.ts";
+import { AVAILABLE_FONTS, DEFAULT_FONT } from "./rendering/font-loader.ts";
 import { serveFile } from "https://esm.town/v/std/utils@85-main/index.ts";
 
 // Initialize Hono app
@@ -39,21 +40,26 @@ app.get("/api/flipdot/content", bearerAuthMiddleware, async (c) => {
     // Generate playlist from all sources (ordered by priority)
     const playlist = await router.generatePlaylist();
 
+    // Calculate optimal poll interval based on next expiration
+    const poll_interval_ms = router.getOptimalPollInterval(
+      DEFAULT_POLL_INTERVAL_MS,
+    );
+
     if (playlist.length === 0) {
       // No content available - return "clear" status
       const response: ContentResponse = {
         status: "clear",
         playlist: [],
-        poll_interval_ms: DEFAULT_POLL_INTERVAL_MS,
+        poll_interval_ms: DEFAULT_POLL_INTERVAL_MS, // Use default when no content
       };
       return c.json(response);
     }
 
-    // Return complete playlist
+    // Return complete playlist with dynamic poll interval
     const response: ContentResponse = {
       status: "updated",
       playlist: playlist,
-      poll_interval_ms: DEFAULT_POLL_INTERVAL_MS,
+      poll_interval_ms: poll_interval_ms, // Tell driver when to check back
     };
 
     return c.json(response);
@@ -87,14 +93,26 @@ app.post("/api/flipdot/text", bearerAuthMiddleware, async (c) => {
       );
     }
 
+    // Validate font if provided
+    if (body.font && !AVAILABLE_FONTS.includes(body.font)) {
+      return c.json(
+        {
+          error: `Invalid font. Available fonts: ${AVAILABLE_FONTS.join(", ")}`,
+        },
+        400,
+      );
+    }
+
     // Create custom text source with provided options
+    const ttl_ms = body.ttl_ms ?? 60000; // Default 1 minute
     const options: CustomTextOptions = {
       text: body.text.toUpperCase(),
       priority: body.priority ?? 20, // Default higher than clock
-      ttl_ms: body.ttl_ms ?? 60000, // Default 1 minute
+      ttl_ms: ttl_ms,
       interruptible: body.interruptible ?? true,
       scroll: body.scroll ?? false,
       frame_delay_ms: body.frame_delay_ms ?? 100,
+      font: body.font ?? DEFAULT_FONT,
     };
 
     // Validate priority range
@@ -103,7 +121,7 @@ app.post("/api/flipdot/text", bearerAuthMiddleware, async (c) => {
     }
 
     // Validate TTL range
-    if (options.ttl_ms! < 1000 || options.ttl_ms! > 3600000) {
+    if (ttl_ms < 1000 || ttl_ms > 3600000) {
       return c.json(
         { error: "TTL must be between 1000ms and 3600000ms" },
         400,
@@ -111,7 +129,9 @@ app.post("/api/flipdot/text", bearerAuthMiddleware, async (c) => {
     }
 
     // Create and register the source
-    const source = createCustomTextSource(options);
+    // Set expiration time = now + ttl_ms
+    const expires_at = Date.now() + ttl_ms;
+    const source = createCustomTextSource(options, expires_at);
     router.registerSource(source);
 
     return c.json({
@@ -121,6 +141,7 @@ app.post("/api/flipdot/text", bearerAuthMiddleware, async (c) => {
       type: source.type,
       priority: source.priority,
       ttl_ms: source.ttl_ms,
+      font: options.font,
       expires_at: new Date(Date.now() + source.ttl_ms).toISOString(),
     });
   } catch (error) {
@@ -179,6 +200,17 @@ app.get(
     return c.json({ authenticated: !!authenticated });
   },
 );
+
+/**
+ * GET /api/flipdot/fonts
+ * List available fonts (no auth required)
+ */
+app.get("/api/flipdot/fonts", (c) => {
+  return c.json({
+    default: DEFAULT_FONT,
+    available: AVAILABLE_FONTS,
+  });
+});
 
 /**
  * GET /health

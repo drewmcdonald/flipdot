@@ -17,6 +17,13 @@ _font_registry: dict[str, DotFont] = {}
 class DotFont:
     """A bitmap font loaded from pre-rendered JSON data."""
 
+    name: str
+    height: int
+    space_width: int
+    char_spacing: int
+    glyphs: dict[str, list[list[int]]]
+    baseline_offset: int
+
     def __init__(
         self,
         name: str,
@@ -42,7 +49,9 @@ class DotFont:
         self.space_width = space_width
         self.char_spacing = char_spacing
         self.glyphs = glyphs
-        self.baseline_offset = baseline_offset if baseline_offset is not None else height
+        self.baseline_offset = (
+            baseline_offset if baseline_offset is not None else height
+        )
 
     @classmethod
     def load(cls, json_path: str | Path) -> DotFont:
@@ -126,7 +135,7 @@ class DotFont:
         result: list[list[int]] = [[0] * total_width for _ in range(self.height)]
 
         x_offset = 0
-        for i, (char, bitmap) in enumerate(zip(text, char_bitmaps)):
+        for i, (_, bitmap) in enumerate(zip(text, char_bitmaps, strict=False)):
             if not bitmap or not bitmap[0]:
                 # Empty glyph (space)
                 x_offset += self.space_width

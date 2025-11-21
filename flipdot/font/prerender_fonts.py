@@ -50,7 +50,7 @@ ASCII_START = 32  # Space
 ASCII_END = 126  # Tilde
 
 
-def render_char(face: freetype.Face, char: str, target_height: int) -> tuple[list[list[int]], int]:
+def render_char(face: freetype.Face, char: str) -> tuple[list[list[int]], int]:
     """
     Render a single character to a bitmap.
 
@@ -64,7 +64,7 @@ def render_char(face: freetype.Face, char: str, target_height: int) -> tuple[lis
         bearing_y is distance from baseline to top of glyph
     """
     # Load the character
-    face.load_char(char, freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_MONO)
+    face.load_char(char, freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_MONO)  # pyright: ignore[reportAttributeAccessIssue]
 
     bitmap = face.glyph.bitmap
     width = bitmap.width
@@ -146,7 +146,9 @@ def pad_glyph_to_height(
     return result
 
 
-def render_font(font_path: Path, target_height: int) -> tuple[dict[str, list[list[int]]], int]:
+def render_font(
+    font_path: Path, target_height: int
+) -> tuple[dict[str, list[list[int]]], int]:
     """
     Render all printable ASCII characters for a font.
 
@@ -163,7 +165,7 @@ def render_font(font_path: Path, target_height: int) -> tuple[dict[str, list[lis
     face = freetype.Face(str(font_path))
 
     # Set pixel size (height)
-    face.set_pixel_sizes(0, target_height)
+    face.set_pixel_sizes(0, int(target_height))
 
     # First pass: render all glyphs and collect bearings
     raw_glyphs: dict[str, tuple[list[list[int]], int]] = {}
@@ -171,7 +173,7 @@ def render_font(font_path: Path, target_height: int) -> tuple[dict[str, list[lis
 
     for code in range(ASCII_START, ASCII_END + 1):
         char = chr(code)
-        bitmap, bearing_y = render_char(face, char, target_height)
+        bitmap, bearing_y = render_char(face, char)
         raw_glyphs[char] = (bitmap, bearing_y)
 
         # Collect bearings from typical baseline characters
@@ -185,7 +187,9 @@ def render_font(font_path: Path, target_height: int) -> tuple[dict[str, list[lis
     # Second pass: pad all glyphs to target height with baseline alignment
     glyphs: dict[str, list[list[int]]] = {}
     for char, (bitmap, bearing_y) in raw_glyphs.items():
-        glyphs[char] = pad_glyph_to_height(bitmap, bearing_y, max_bearing, target_height)
+        glyphs[char] = pad_glyph_to_height(
+            bitmap, bearing_y, max_bearing, target_height
+        )
 
     return glyphs, max_bearing
 
@@ -202,7 +206,7 @@ def main() -> None:
     print()
 
     for font_name, config in FONTS.items():
-        font_path = fonts_dir / config["file"]
+        font_path = fonts_dir / config["file"]  # pyright: ignore[reportOperatorIssue]
 
         if not font_path.exists():
             print(f"⚠ Skipping {font_name}: {font_path} not found")
@@ -211,7 +215,7 @@ def main() -> None:
         print(f"Rendering {font_name} ({config['file']})...")
 
         # Render all glyphs and get baseline offset
-        glyphs, baseline_offset = render_font(font_path, config["height"])
+        glyphs, baseline_offset = render_font(font_path, int(config["height"]))
 
         # Create font data
         font_data = {
