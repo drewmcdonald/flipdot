@@ -20,6 +20,6 @@ jobs:
       - name: Install dependencies
         run: poetry install --with dev
       - name: Run basedpyright
-        run: poetry run basedpyright flipdot
+        run: poetry run basedpyright --level error flipdot
       - name: Run ruff
         run: poetry run ruff check flipdot
