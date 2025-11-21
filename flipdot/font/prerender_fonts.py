@@ -64,7 +64,7 @@ def render_char(face: freetype.Face, char: str) -> tuple[list[list[int]], int]:
         bearing_y is distance from baseline to top of glyph
     """
     # Load the character
-    face.load_char(char, freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_MONO)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType, reportAttributeAccessIssue]
+    face.load_char(char, freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_MONO)  # pyright: ignore[reportAttributeAccessIssue]
 
     bitmap = face.glyph.bitmap
     width = bitmap.width

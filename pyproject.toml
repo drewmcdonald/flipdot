@@ -55,3 +55,10 @@ lint.ignore = []
 [tool.basedpyright]
 ignore = ['graveyard', 'flipdot/tests']
 reportImplicitStringConcatenation = false
+
+[[tool.basedpyright.executionEnvironments]]
+root = "flipdot/font"
+reportAny = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false

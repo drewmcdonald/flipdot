@@ -135,7 +135,7 @@ class DotFont:
         result: list[list[int]] = [[0] * total_width for _ in range(self.height)]
 
         x_offset = 0
-        for i, (char, bitmap) in enumerate(zip(text, char_bitmaps, strict=False)):
+        for i, (_, bitmap) in enumerate(zip(text, char_bitmaps, strict=False)):
             if not bitmap or not bitmap[0]:
                 # Empty glyph (space)
                 x_offset += self.space_width
