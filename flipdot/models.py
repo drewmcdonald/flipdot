@@ -216,7 +216,10 @@ class ContentResponse(BaseModel):
     status: ResponseStatus = Field(..., description="Status of the response")
     playlist: list[Content] = Field(
         default_factory=list,
-        description="Complete playlist to display. First item plays immediately, rest queued in order.",
+        description=(
+            "Complete playlist to display. "
+            "First item plays immediately, rest queued in order."
+        ),
     )
     poll_interval_ms: int = Field(
         default=30000, ge=1000, description="How long to wait before next poll"
@@ -224,9 +227,7 @@ class ContentResponse(BaseModel):
 
     @field_validator("playlist")
     @classmethod
-    def validate_playlist(
-        cls, v: list[Content], info: ValidationInfo
-    ) -> list[Content]:
+    def validate_playlist(cls, v: list[Content], info: ValidationInfo) -> list[Content]:
         """Validate that playlist is present when status is updated."""
         status = info.data.get("status")
         if status == ResponseStatus.UPDATED and not v:
