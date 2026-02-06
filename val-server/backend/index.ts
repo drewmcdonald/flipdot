@@ -41,7 +41,7 @@ app.get("/api/flipdot/content", bearerAuthMiddleware, async (c) => {
     const playlist = await router.generatePlaylist();
 
     // Calculate optimal poll interval based on next expiration
-    const poll_interval_ms = router.getOptimalPollInterval(
+    const poll_interval_ms = await router.getOptimalPollInterval(
       DEFAULT_POLL_INTERVAL_MS,
     );
 
@@ -52,6 +52,8 @@ app.get("/api/flipdot/content", bearerAuthMiddleware, async (c) => {
         playlist: [],
         poll_interval_ms: DEFAULT_POLL_INTERVAL_MS, // Use default when no content
       };
+
+      console.log("Content response:", response);
       return c.json(response);
     }
 
@@ -62,6 +64,7 @@ app.get("/api/flipdot/content", bearerAuthMiddleware, async (c) => {
       poll_interval_ms: poll_interval_ms, // Tell driver when to check back
     };
 
+    console.log("Content response:", response);
     return c.json(response);
   } catch (error) {
     console.error("Error handling content request:", error);

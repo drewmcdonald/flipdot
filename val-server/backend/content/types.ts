@@ -33,6 +33,13 @@ export interface ContentSource {
 
   /** Function to generate content */
   generate: () => Promise<Content>;
+
+  /**
+   * Optional function to calculate when this content should be updated next
+   * Useful for content that needs to update at specific times (e.g., clock at next minute boundary)
+   * Returns milliseconds since epoch, or undefined to use TTL-based expiration
+   */
+  getNextUpdateTime?: () => number;
 }
 
 /**
@@ -47,6 +54,13 @@ export interface CachedContent {
 
   /** TTL in milliseconds */
   ttl_ms: number;
+
+  /**
+   * Optional next update timestamp (milliseconds since epoch)
+   * When set, indicates when this content needs to be regenerated
+   * This allows content to specify dynamic update intervals (e.g., clock updates at next minute)
+   */
+  next_update_ms?: number;
 }
 
 /**

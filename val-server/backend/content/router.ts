@@ -69,12 +69,14 @@ export class ContentRouter {
     cacheKey: string,
     content: Content,
     ttl_ms: number,
+    next_update_ms?: number,
   ): Promise<void> {
     try {
       const cached: CachedContent = {
         content,
         cached_at: Date.now(),
         ttl_ms,
+        next_update_ms,
       };
       await storage.setJSON(cacheKey, cached);
     } catch (error) {
@@ -98,7 +100,16 @@ export class ContentRouter {
     if (!content) {
       try {
         content = await source.generate();
-        await this.setCachedContent(cacheKey, content, source.ttl_ms);
+
+        // Calculate next update time if source provides it
+        const next_update_ms = source.getNextUpdateTime?.();
+
+        await this.setCachedContent(
+          cacheKey,
+          content,
+          source.ttl_ms,
+          next_update_ms,
+        );
       } catch (error) {
         console.error(
           `Error generating content from source ${source.id}:`,
@@ -125,7 +136,9 @@ export class ContentRouter {
     );
     for (const source of expiredSources) {
       console.log(
-        `Removing expired source: ${source.id} (expired at ${new Date(source.expires_at!).toISOString()})`,
+        `Removing expired source: ${source.id} (expired at ${
+          new Date(source.expires_at!).toISOString()
+        })`,
       );
       this.unregisterSource(source.id);
     }
@@ -225,10 +238,12 @@ export class ContentRouter {
   }
 
   /**
-   * Calculate optimal poll interval based on next expiration time
-   * Returns milliseconds until the next source expires, or default interval
+   * Calculate optimal poll interval based on next content update and source expiration
+   * Returns milliseconds until the next update is needed, or default interval
    */
-  getOptimalPollInterval(defaultInterval: number = 30000): number {
+  async getOptimalPollInterval(
+    defaultInterval: number = 30000,
+  ): Promise<number> {
     const now = Date.now();
     const sources = this.getSources();
 
@@ -237,23 +252,41 @@ export class ContentRouter {
       .filter((s) => s.expires_at !== undefined)
       .map((s) => s.expires_at!);
 
-    if (expiringTimes.length === 0) {
-      // No expiring sources, use default interval
-      return defaultInterval;
+    let minInterval = defaultInterval;
+
+    if (expiringTimes.length > 0) {
+      const nextExpiration = Math.min(...expiringTimes);
+      const timeUntilExpiration = nextExpiration - now;
+
+      // If expiration is in the past or very soon, poll again quickly
+      if (timeUntilExpiration <= 0) {
+        return 1000; // 1 second (minimum)
+      }
+
+      // Add a small buffer (1 second) to ensure we poll after expiration
+      minInterval = Math.min(minInterval, timeUntilExpiration + 1000);
     }
 
-    const nextExpiration = Math.min(...expiringTimes);
-    const timeUntilExpiration = nextExpiration - now;
-
-    // If expiration is in the past or very soon, poll again quickly
-    if (timeUntilExpiration <= 0) {
-      return 1000; // 1 second (minimum)
+    // Check all cached content for next_update_ms
+    for (const source of sources) {
+      const cacheKey = `flipdot:source:${source.id}`;
+      try {
+        const cached = await storage.getJSON(cacheKey) as CachedContent | null;
+        if (cached?.next_update_ms) {
+          const timeUntilUpdate = cached.next_update_ms - now;
+          if (timeUntilUpdate > 0) {
+            // Add buffer to ensure we poll after the update time
+            minInterval = Math.min(minInterval, timeUntilUpdate + 1000);
+          } else {
+            // Content needs immediate update
+            return 1000;
+          }
+        }
+      } catch (_error) {
+        // Ignore cache read errors
+      }
     }
 
-    // Add a small buffer (1 second) to ensure we poll after expiration
-    const pollInterval = timeUntilExpiration + 1000;
-
-    // Cap at default interval (don't poll less frequently than default)
-    return Math.min(pollInterval, defaultInterval);
+    return minInterval;
   }
 }
