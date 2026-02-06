@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "convex": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["convex", "mcp", "start"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    }
+  }
+}
