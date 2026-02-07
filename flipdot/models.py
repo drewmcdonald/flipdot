@@ -1,13 +1,13 @@
 """
 Data models for the flipdot driver protocol.
 
-All content is fetched from a remote server in a structured format.
+Content is received from Convex in a structured format.
 Frames contain base64-encoded packed bit data for efficiency.
 """
 
 import base64
 from enum import Enum
-from typing import ClassVar, Literal, cast
+from typing import ClassVar, cast
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
@@ -235,51 +235,16 @@ class ContentResponse(BaseModel):
         return v
 
 
-class AuthConfig(BaseModel):
-    """Authentication configuration."""
-
-    type: Literal["bearer", "api_key"] = Field(
-        default="api_key", description="Authentication type"
-    )
-    token: str | None = Field(default=None, description="Bearer token (if type=bearer)")
-    key: str | None = Field(default=None, description="API key (if type=api_key)")
-    header_name: str = Field(
-        default="X-API-Key", description="Header name for API key auth"
-    )
-
-
-class ErrorFallback(str, Enum):
-    """Fallback behavior when server is unreachable."""
-
-    KEEP_LAST = "keep_last"  # Keep displaying last known content
-    BLANK = "blank"  # Show blank screen
-    ERROR_MESSAGE = "error_message"  # Show error message (if supported)
-
-
 class DriverConfig(BaseModel):
     """Configuration for the flipdot driver."""
 
-    # Server configuration (HTTP polling - legacy)
-    poll_endpoint: str | None = Field(
-        default=None,
-        description="URL to poll for content updates (not needed if using Convex)",
-    )
-    poll_interval_ms: int = Field(
-        default=30000, ge=1000, description="Default polling interval"
-    )
-
-    # Convex configuration (real-time)
-    convex_url: str | None = Field(
-        default=None,
-        description="Convex deployment URL. If set, uses Convex instead of HTTP.",
+    # Convex configuration
+    convex_url: str = Field(
+        ...,
+        description="Convex deployment URL for real-time content updates.",
     )
     display_name: str = Field(
         default="main", description="Display name to subscribe to in Convex"
-    )
-
-    # Authentication
-    auth: AuthConfig = Field(
-        default_factory=AuthConfig, description="Authentication configuration"
     )
 
     # Hardware configuration
@@ -294,10 +259,6 @@ class DriverConfig(BaseModel):
     module_height: int = Field(default=7, description="Height of each module in pixels")
 
     # Behavior configuration
-    error_fallback: ErrorFallback = Field(
-        default=ErrorFallback.KEEP_LAST,
-        description="What to do when server is unreachable",
-    )
     dev_mode: bool = Field(
         default=False,
         description="Development mode: print to console instead of serial",

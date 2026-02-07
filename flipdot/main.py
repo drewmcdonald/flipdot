@@ -2,9 +2,8 @@
 Main driver entry point.
 
 This is the minimal driver that runs on the Raspberry Pi. It:
-- Polls a remote server for content
-- Optionally accepts push notifications
-- Manages a priority queue of content
+- Subscribes to a Convex backend for real-time content updates
+- Manages a content queue
 - Displays frames on the flipdot hardware
 """
 
@@ -13,12 +12,10 @@ from __future__ import annotations
 import logging
 import signal
 import sys
-import time
 from pathlib import Path
 from types import FrameType
 from typing import TYPE_CHECKING, cast, final
 
-from flipdot.client import ContentClient, ErrorHandler
 from flipdot.hardware import Panel, SerialConnection
 from flipdot.models import (
     DriverConfig,
@@ -28,7 +25,6 @@ from flipdot.queue import ContentQueue
 
 if TYPE_CHECKING:
     from flipdot.config import DriverLimits
-    from flipdot.convex_client import ConvexContentClient
 
 logger = logging.getLogger(__name__)
 
@@ -79,63 +75,25 @@ class FlipDotDriver:
 
         # Initialize content management
         self.queue = ContentQueue(limits=limits)
-        self._convex_client: ConvexContentClient | None = None
-        self._http_client: ContentClient | None = None
 
-        if config.convex_url:
-            from .convex_client import ConvexContentClient as ConvexClientImpl
+        from .convex_client import ConvexContentClient
 
-            self._convex_client = ConvexClientImpl(
-                config.convex_url, config.display_name
-            )
-            self._convex_client.start()
-        else:
-            if not config.poll_endpoint:
-                raise ValueError(
-                    "Either convex_url or poll_endpoint must be configured"
-                )
-            self._http_client = ContentClient(
-                endpoint=config.poll_endpoint,
-                auth=config.auth,
-                limits=limits,
-            )
-
-        self.error_handler = ErrorHandler(fallback=config.error_fallback)
+        self._convex_client = ConvexContentClient(
+            config.convex_url, config.display_name
+        )
+        self._convex_client.start()
 
     def _poll_for_content(self, timeout: float = 0.0) -> None:
         """
-        Check for content updates.
+        Wait for content updates from the Convex backend.
 
         Args:
-            timeout: For Convex mode, max seconds to block waiting for updates.
-                     For HTTP mode, this is ignored (uses internal poll timing).
+            timeout: Max seconds to block waiting for updates.
         """
-        # Convex mode: wait for pushed updates (blocks up to timeout)
-        if self._convex_client is not None:
-            response = self._convex_client.wait_for_update(timeout)
-            if response is None:
-                return
-        elif self._http_client is not None:
-            # HTTP mode: poll if it's time
-            if not self._http_client.should_poll():
-                return
-
-            response = self._http_client.fetch_content()
-
-            if response is None:
-                # Handle error
-                logger.warning("Failed to fetch content, using fallback")
-                response = self.error_handler.get_fallback_response()
-                if response is None:
-                    return
-        else:
+        response = self._convex_client.wait_for_update(timeout)
+        if response is None:
             return
 
-        # Record successful fetch
-        if response.playlist:
-            self.error_handler.set_last_successful(response)
-
-        # Process response
         if response.status == ResponseStatus.UPDATED:
             # Validate all content dimensions against display before accepting
             height, width = self.panel.dimensions
@@ -162,7 +120,7 @@ class FlipDotDriver:
         if not self.serial.write(serial_data):
             logger.error("Failed to clear display due to serial error")
 
-    def _calculate_next_sleep_ms(self) -> float:
+    def _calculate_next_sleep_s(self) -> float:
         """
         Calculate the sleep duration for the main loop.
 
@@ -207,20 +165,14 @@ class FlipDotDriver:
 
         # Main loop
         try:
-            sleep_seconds = self._calculate_next_sleep_ms()
+            sleep_seconds = self._calculate_next_sleep_s()
 
             while self.running:
-                # Check for new content
-                # Convex mode: blocks up to sleep_seconds, wakes instantly on update
-                # HTTP mode: checks if poll is due (non-blocking)
+                # Wait for content updates (blocks up to sleep_seconds)
                 self._poll_for_content(timeout=sleep_seconds)
 
                 # Render current frame
                 self._render_frame()
-
-                # HTTP mode needs explicit sleep; Convex mode already waited above
-                if self._http_client is not None:
-                    time.sleep(sleep_seconds)
 
         except KeyboardInterrupt:
             logger.info("Received interrupt signal")
@@ -241,9 +193,8 @@ class FlipDotDriver:
         logger.info("Clearing display...")
         self._clear_display()
 
-        # Close Convex client if using real-time mode
-        if self._convex_client is not None:
-            self._convex_client.close()
+        # Close Convex client
+        self._convex_client.close()
 
         # Close serial connection
         self.serial.close()

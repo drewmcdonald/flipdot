@@ -4,13 +4,10 @@ Comprehensive tests for the flipdot driver implementation.
 
 import base64
 import time
-from email.message import Message
 from unittest.mock import Mock, patch
-from urllib.error import HTTPError, URLError
 
 import pytest
 
-from flipdot.client import ContentClient, ErrorHandler
 from flipdot.hardware import (
     FlippyModule,
     Panel,
@@ -18,23 +15,18 @@ from flipdot.hardware import (
     pack_bits_little_endian,
 )
 from flipdot.models import (
-    AuthConfig,
     Content,
     ContentResponse,
     DriverConfig,
-    ErrorFallback,
     Frame,
     PlaybackMode,
     ResponseStatus,
 )
 from flipdot.queue import ContentQueue, ContentState
-from flipdot.server import PushServer
 
 # =============================================================================
 # Test Utilities
 # =============================================================================
-
-dummy_message = Message()
 
 
 def create_test_frame(
@@ -52,13 +44,16 @@ def create_test_frame(
 def create_test_content(
     content_id: str = "test",
     num_frames: int = 1,
-    priority: int = 0,
     loop: bool = False,
-    interruptible: bool = True,
+    loop_count: int | None = None,
 ) -> Content:
     """Create test content with specified parameters."""
     frames = [create_test_frame() for _ in range(num_frames)]
-    playback = PlaybackMode(loop=loop, priority=priority, interruptible=interruptible)
+    playback = (
+        PlaybackMode(loop=loop, loop_count=loop_count)
+        if loop
+        else PlaybackMode(loop=loop)
+    )
     return Content(content_id=content_id, frames=frames, playback=playback)
 
 
@@ -275,30 +270,6 @@ class TestContent:
         with pytest.raises(ValueError):
             Content(content_id="test", frames=[], playback=PlaybackMode())
 
-    def test_content_priority_levels(self):
-        """Test different priority levels."""
-        for priority in [0, 5, 10, 50, 99]:
-            content = create_test_content(priority=priority)
-            assert content.playback.priority == priority
-
-    def test_content_invalid_priority(self):
-        """Test invalid priority values."""
-        frame = create_test_frame()
-
-        with pytest.raises(ValueError):
-            Content(
-                content_id="test",
-                frames=[frame],
-                playback=PlaybackMode(priority=-1),
-            )
-
-        with pytest.raises(ValueError):
-            Content(
-                content_id="test",
-                frames=[frame],
-                playback=PlaybackMode(priority=100),
-            )
-
     def test_content_loop_configurations(self):
         """Test various loop configurations."""
         # No loop
@@ -324,14 +295,6 @@ class TestContent:
         )
         assert content.playback.loop_count == 5
 
-    def test_content_interruptible_flag(self):
-        """Test interruptible configurations."""
-        content = create_test_content(interruptible=True)
-        assert content.playback.interruptible is True
-
-        content = create_test_content(interruptible=False)
-        assert content.playback.interruptible is False
-
 
 # =============================================================================
 # ContentResponse Model Tests
@@ -346,51 +309,42 @@ class TestContentResponse:
         content = create_test_content()
         response = ContentResponse(
             status=ResponseStatus.UPDATED,
-            content=content,
+            playlist=[content],
             poll_interval_ms=30000,
         )
         assert response.status == ResponseStatus.UPDATED
-        assert response.content is not None
+        assert len(response.playlist) == 1
 
     def test_response_updated_without_content_fails(self):
-        """Test that updated status requires content."""
-        with pytest.raises(ValueError, match="content must be provided"):
-            ContentResponse(status=ResponseStatus.UPDATED, content=None)
-
-    def test_response_no_change(self):
-        """Test no_change response."""
-        response = ContentResponse(
-            status=ResponseStatus.NO_CHANGE, poll_interval_ms=60000
-        )
-        assert response.status == ResponseStatus.NO_CHANGE
-        assert response.content is None
-        assert response.poll_interval_ms == 60000
+        """Test that updated status requires non-empty playlist."""
+        with pytest.raises(ValueError, match="playlist must be non-empty"):
+            ContentResponse(status=ResponseStatus.UPDATED, playlist=[])
 
     def test_response_clear(self):
         """Test clear response."""
         response = ContentResponse(status=ResponseStatus.CLEAR)
         assert response.status == ResponseStatus.CLEAR
-        assert response.content is None
+        assert len(response.playlist) == 0
 
     def test_response_invalid_poll_interval(self):
         """Test invalid poll intervals."""
         with pytest.raises(ValueError):
-            ContentResponse(status=ResponseStatus.NO_CHANGE, poll_interval_ms=500)
+            ContentResponse(status=ResponseStatus.CLEAR, poll_interval_ms=500)
 
         with pytest.raises(ValueError):
-            ContentResponse(status=ResponseStatus.NO_CHANGE, poll_interval_ms=-1000)
+            ContentResponse(status=ResponseStatus.CLEAR, poll_interval_ms=-1000)
 
     def test_response_serialization(self):
         """Test response serialization."""
         content = create_test_content()
         response = ContentResponse(
-            status=ResponseStatus.UPDATED, content=content, poll_interval_ms=30000
+            status=ResponseStatus.UPDATED, playlist=[content], poll_interval_ms=30000
         )
         json_str = response.model_dump_json()
         parsed = ContentResponse.model_validate_json(json_str)
         assert parsed.status == response.status
-        assert parsed.content is not None
-        assert parsed.content.content_id == content.content_id
+        assert len(parsed.playlist) == 1
+        assert parsed.playlist[0].content_id == content.content_id
 
 
 # =============================================================================
@@ -452,8 +406,8 @@ class TestFlippyModule:
         module.set_content([[1, 0, 1, 0, 1, 0, 1, 0]])
         command = module.fetch_serial_command(flush=True)
 
-        # START_BYTES_FLUSH (2) + ADDRESS (1) + DATA (1 byte) + END_BYTES (1) = 5 bytes
-        assert len(command) == 5
+        # START(2) + ADDR(1) + DATA(8 cols) + END(1) = 12 bytes
+        assert len(command) == 12
         assert command[0:2] == bytes([0x80, 0x83])
         assert command[2] == 5
         assert command[-1] == 0x8F
@@ -581,16 +535,16 @@ class TestPanel:
         serial_data = panel.set_content(content)
 
         # Should have 2 modules worth of commands
-        # Each command: START(2) + ADDR(1) + DATA(1) + END(1) = 5 bytes
-        assert len(serial_data) == 10
+        # Each command: START(2) + ADDR(1) + DATA(2 cols) + END(1) = 6
+        assert len(serial_data) == 12
 
         # Check structure of first command
         assert serial_data[0:2] == bytes([0x80, 0x83])
-        assert serial_data[4] == 0x8F
+        assert serial_data[5] == 0x8F
 
         # Check structure of second command
-        assert serial_data[5:7] == bytes([0x80, 0x83])
-        assert serial_data[9] == 0x8F
+        assert serial_data[6:8] == bytes([0x80, 0x83])
+        assert serial_data[11] == 0x8F
 
     def test_panel_set_content_from_frame(self):
         """Test setting content from packed frame data."""
@@ -690,8 +644,7 @@ class TestContentState:
 
         assert state.frame_index == 0
         assert state.loop_count == 0
-        assert state.paused is False
-        assert state.time_paused == 0
+        assert state.frame_start_time > 0
 
     def test_state_current_frame(self):
         """Test getting current frame."""
@@ -705,12 +658,27 @@ class TestContentState:
 
     def test_state_is_complete_no_loop(self):
         """Test completion detection without looping."""
-        content = create_test_content(num_frames=2, loop=False)
+        # Use very short duration so we can test completion
+        frame1 = create_test_frame(duration_ms=10)
+        frame2 = create_test_frame(duration_ms=10)
+        content = Content(
+            content_id="test",
+            frames=[frame1, frame2],
+            playback=PlaybackMode(loop=False),
+        )
         state = ContentState(content)
 
         assert state.is_complete is False
 
+        # Move to last frame
         state.frame_index = 1
+        state.frame_start_time = time.time()
+
+        # Not complete yet (duration hasn't elapsed)
+        assert state.is_complete is False
+
+        # Wait for duration to elapse
+        time.sleep(0.02)
         assert state.is_complete is True
 
     def test_state_is_complete_infinite_loop(self):
@@ -769,38 +737,6 @@ class TestContentState:
         assert state.advance_frame() is False
         assert state.frame_index == 0
 
-    def test_state_pause_resume(self):
-        """Test pausing and resuming."""
-        content = create_test_content()
-        state = ContentState(content)
-
-        assert state.paused is False
-
-        state.pause()
-        assert state.paused is True
-        assert state.paused_at is not None
-
-        time.sleep(0.01)
-
-        state.resume()
-        assert state.paused is False
-        assert state.time_paused > 0
-
-    def test_state_reset(self):
-        """Test resetting state."""
-        content = create_test_content(num_frames=3)
-        state = ContentState(content)
-
-        state.frame_index = 2
-        state.loop_count = 5
-        state.time_paused = 1.5
-
-        state.reset()
-
-        assert state.frame_index == 0
-        assert state.loop_count == 0
-        assert state.time_paused == 0
-
 
 # =============================================================================
 # ContentQueue Tests
@@ -815,376 +751,115 @@ class TestContentQueue:
         queue = ContentQueue()
         assert not queue.has_content()
         assert queue.get_current_content_id() is None
-        assert len(queue.queue) == 0
-        assert len(queue.interrupted) == 0
 
-    def test_queue_add_to_empty(self):
-        """Test adding content to empty queue."""
+    def test_queue_set_playlist_single(self):
+        """Test setting playlist with a single item."""
         queue = ContentQueue()
         content = create_test_content("test-1")
-        queue.add_content(content)
+        queue.set_playlist([content])
 
         assert queue.has_content()
         assert queue.get_current_content_id() == "test-1"
 
-    def test_queue_priority_interrupt(self):
-        """Test higher priority interrupts lower priority."""
+    def test_queue_set_playlist_multiple(self):
+        """Test setting playlist with multiple items."""
+        queue = ContentQueue()
+        items = [create_test_content(f"item-{i}") for i in range(3)]
+        queue.set_playlist(items)
+
+        assert queue.get_current_content_id() == "item-0"
+        assert len(queue.queue) == 2
+
+    def test_queue_set_playlist_preserves_state(self):
+        """Test that set_playlist preserves state when content_id matches."""
+        queue = ContentQueue()
+        content1 = create_test_content("same-id", num_frames=3)
+        queue.set_playlist([content1])
+
+        # Advance the frame index
+        queue.current.frame_index = 2
+
+        # Set playlist again with the same content_id
+        content2 = create_test_content("same-id", num_frames=3)
+        queue.set_playlist([content2])
+
+        # Frame index should be preserved
+        assert queue.current.frame_index == 2
+
+    def test_queue_set_playlist_replaces(self):
+        """Test that set_playlist starts fresh with different content_id."""
+        queue = ContentQueue()
+        content1 = create_test_content("old-id", num_frames=3)
+        queue.set_playlist([content1])
+
+        queue.current.frame_index = 2
+
+        # Set playlist with a different content_id
+        content2 = create_test_content("new-id", num_frames=3)
+        queue.set_playlist([content2])
+
+        # Should start fresh
+        assert queue.get_current_content_id() == "new-id"
+        assert queue.current.frame_index == 0
+
+    def test_queue_update_returns_frame(self):
+        """Test that update returns the current frame."""
+        queue = ContentQueue()
+        content = create_test_content("test")
+        queue.set_playlist([content])
+
+        frame = queue.update()
+        assert frame is not None
+        assert frame == content.frames[0]
+
+    def test_queue_update_advances_and_moves_to_next(self):
+        """Test that update advances frames and moves to next content."""
         queue = ContentQueue()
 
-        # Add low priority
-        low = create_test_content("low", priority=0, interruptible=True)
-        queue.add_content(low)
-        assert queue.get_current_content_id() == "low"
-
-        # Add high priority
-        high = create_test_content("high", priority=10)
-        queue.add_content(high)
-
-        # Should have switched
-        assert queue.get_current_content_id() == "high"
-        assert len(queue.interrupted) == 1
-        assert queue.interrupted[0].content.content_id == "low"
-
-    def test_queue_non_interruptible(self):
-        """Test that non-interruptible content can't be interrupted."""
-        queue = ContentQueue()
-
-        # Add non-interruptible content
-        content = create_test_content("locked", priority=0, interruptible=False)
-        queue.add_content(content)
-
-        # Try to interrupt with higher priority
-        high = create_test_content("high", priority=10)
-        queue.add_content(high)
-
-        # Should NOT have switched
-        assert queue.get_current_content_id() == "locked"
-        assert len(queue.queue) == 1  # High priority in queue
-        assert len(queue.interrupted) == 0
-
-    def test_queue_resume_after_interrupt(self):
-        """Test resuming interrupted content."""
-        queue = ContentQueue()
-
-        # Add base content
-        base = create_test_content("base", priority=0, interruptible=True)
-        queue.add_content(base)
-
-        # Interrupt with notification
-        notif_frames = [create_test_frame(duration_ms=10)]
-        notif = Content(
-            content_id="notif",
-            frames=notif_frames,
-            playback=PlaybackMode(priority=10, loop=False),
+        # Create two contents with short timed frames
+        frame1 = create_test_frame(duration_ms=10)
+        content1 = Content(
+            content_id="first",
+            frames=[frame1],
+            playback=PlaybackMode(loop=False),
         )
-        queue.add_content(notif)
+        frame2 = create_test_frame(duration_ms=None)
+        content2 = Content(
+            content_id="second",
+            frames=[frame2],
+            playback=PlaybackMode(loop=False),
+        )
+        queue.set_playlist([content1, content2])
 
-        assert queue.get_current_content_id() == "notif"
+        assert queue.get_current_content_id() == "first"
 
-        # Wait for notification to complete
+        # Wait for first content to complete
         time.sleep(0.02)
         queue.update()
 
-        # Should resume base content
-        assert queue.get_current_content_id() == "base"
-
-    def test_queue_multiple_in_queue(self):
-        """Test multiple items in queue."""
-        queue = ContentQueue()
-
-        # All same priority, should queue in order
-        for i in range(3):
-            content = create_test_content(f"content-{i}", priority=0)
-            queue.add_content(content)
-
-        assert queue.get_current_content_id() == "content-0"
-        assert len(queue.queue) == 2
-
-    def test_queue_priority_ordering(self):
-        """Test queue maintains priority order."""
-        queue = ContentQueue()
-
-        # Add initial content
-        queue.add_content(create_test_content("current", priority=10))
-
-        # Add various priorities to queue
-        queue.add_content(create_test_content("low", priority=5))
-        queue.add_content(create_test_content("high", priority=15))
-        queue.add_content(create_test_content("medium", priority=10))
-
-        # Queue should be ordered by priority (highest first)
-        priorities = [state.content.playback.priority for state in queue.queue]
-        assert priorities == sorted(priorities, reverse=True)
+        # Should have moved to the second content
+        assert queue.get_current_content_id() == "second"
 
     def test_queue_clear(self):
         """Test clearing the queue."""
         queue = ContentQueue()
-
-        queue.add_content(create_test_content("c1"))
-        queue.add_content(create_test_content("c2"))
-        queue.add_content(create_test_content("c3"))
+        items = [create_test_content(f"item-{i}") for i in range(3)]
+        queue.set_playlist(items)
 
         queue.clear()
 
         assert not queue.has_content()
         assert len(queue.queue) == 0
-        assert len(queue.interrupted) == 0
 
-    def test_queue_update_advances_frames(self):
-        """Test that update advances frames."""
+    def test_queue_set_playlist_empty(self):
+        """Test that empty playlist clears the queue."""
         queue = ContentQueue()
-
-        frame = create_test_frame(duration_ms=10)
-        content = Content(
-            content_id="test",
-            frames=[frame, frame, frame],  # 3 frames so it doesn't complete
-            playback=PlaybackMode(loop=True),  # Loop to prevent completion
-        )
-        queue.add_content(content)
-
-        assert queue.current is not None
-        initial_idx = queue.current.frame_index
-        time.sleep(0.02)
-        queue.update()
-
-        # Should still have content (looping) and advanced frame
-        assert queue.current is not None
-        assert queue.current.frame_index > initial_idx
-
-    def test_queue_replace_by_id(self):
-        """Test replacing content by ID."""
-        queue = ContentQueue()
-
-        content1 = create_test_content("test", num_frames=1)
-        queue.add_content(content1)
-
-        content2 = create_test_content("test", num_frames=2)
-        replaced = queue.replace_if_same_id(content2)
-
-        assert replaced is True
-        assert queue.current is not None
-        assert len(queue.current.content.frames) == 2
-
-    def test_queue_replace_not_found(self):
-        """Test replacing content that doesn't exist."""
-        queue = ContentQueue()
-
-        content1 = create_test_content("test1")
-        queue.add_content(content1)
-
-        content2 = create_test_content("test2")
-        replaced = queue.replace_if_same_id(content2)
-
-        assert replaced is False
-
-
-# =============================================================================
-# ContentClient Tests
-# =============================================================================
-
-
-class TestContentClient:
-    """Comprehensive ContentClient tests."""
-
-    def test_client_initialization(self):
-        """Test client initialization."""
-        auth = AuthConfig(type="api_key", key="test-key")
-        client = ContentClient("http://example.com/content", auth)
-
-        assert client.endpoint == "http://example.com/content"
-        assert client.auth == auth
-        assert client.last_poll_time is None
-
-    def test_client_build_headers_api_key(self):
-        """Test building headers with API key auth."""
-        auth = AuthConfig(type="api_key", key="secret-key", header_name="X-API-Key")
-        client = ContentClient("http://example.com", auth)
-
-        headers = client._build_headers()
-        assert headers["X-API-Key"] == "secret-key"
-        assert "Content-Type" in headers
-
-    def test_client_build_headers_bearer(self):
-        """Test building headers with bearer token auth."""
-        auth = AuthConfig(type="bearer", token="bearer-token")
-        client = ContentClient("http://example.com", auth)
-
-        headers = client._build_headers()
-        assert headers["Authorization"] == "Bearer bearer-token"
-
-    def test_client_should_poll_initially(self):
-        """Test that client should poll initially."""
-        auth = AuthConfig()
-        client = ContentClient("http://example.com", auth)
-
-        assert client.should_poll() is True
-
-    def test_client_should_poll_after_interval(self):
-        """Test polling interval logic."""
-        auth = AuthConfig()
-        client = ContentClient("http://example.com", auth)
-
-        client.last_poll_time = time.time()
-        client.poll_interval_ms = 100
-
-        # Should not poll immediately
-        assert client.should_poll() is False
-
-        # Should poll after interval
-        time.sleep(0.12)
-        assert client.should_poll() is True
-
-    def test_client_get_next_poll_delay(self):
-        """Test calculating next poll delay."""
-        auth = AuthConfig()
-        client = ContentClient("http://example.com", auth)
-
-        client.last_poll_time = time.time()
-        client.poll_interval_ms = 1000
-
-        delay = client.get_next_poll_delay_ms()
-        assert 0 <= delay <= 1000
-
-    @patch("flipdot.client.urlopen")
-    def test_client_fetch_success(self, mock_urlopen):
-        """Test successful content fetch."""
-        content = create_test_content()
-        response = ContentResponse(
-            status=ResponseStatus.UPDATED, content=content, poll_interval_ms=30000
-        )
-
-        mock_response = Mock()
-        mock_response.read.return_value = response.model_dump_json().encode()
-        mock_response.__enter__ = Mock(return_value=mock_response)
-        mock_response.__exit__ = Mock(return_value=False)
-        mock_urlopen.return_value = mock_response
-
-        auth = AuthConfig()
-        client = ContentClient("http://example.com", auth)
-
-        result = client.fetch_content()
-
-        assert result is not None
-        assert result.status == ResponseStatus.UPDATED
-        assert client.consecutive_errors == 0
-
-    @patch("flipdot.client.urlopen")
-    def test_client_fetch_http_error(self, mock_urlopen):
-        """Test handling HTTP errors."""
-
-        mock_urlopen.side_effect = HTTPError(
-            "http://example.com",
-            404,
-            "Not Found",
-            dummy_message,
-            None,
-        )
-
-        auth = AuthConfig()
-        client = ContentClient("http://example.com", auth)
-
-        result = client.fetch_content()
-
-        assert result is None
-        assert client.consecutive_errors == 1
-
-    @patch("flipdot.client.urlopen")
-    def test_client_fetch_auth_error(self, mock_urlopen):
-        """Test handling authentication errors."""
-        mock_urlopen.side_effect = HTTPError(
-            "http://example.com", 401, "Unauthorized", dummy_message, None
-        )
-
-        auth = AuthConfig()
-        client = ContentClient("http://example.com", auth)
-
-        result = client.fetch_content()
-
-        assert result is None
-        assert client.consecutive_errors == 1
-
-    @patch("flipdot.client.urlopen")
-    def test_client_fetch_network_error(self, mock_urlopen):
-        """Test handling network errors."""
-        mock_urlopen.side_effect = URLError("Network unreachable")
-
-        auth = AuthConfig()
-        client = ContentClient("http://example.com", auth)
-
-        result = client.fetch_content()
-
-        assert result is None
-        assert client.consecutive_errors == 1
-
-    @patch("flipdot.client.urlopen")
-    def test_client_fetch_invalid_json(self, mock_urlopen):
-        """Test handling invalid JSON response."""
-        mock_response = Mock()
-        mock_response.read.return_value = b"not valid json"
-        mock_response.__enter__ = Mock(return_value=mock_response)
-        mock_response.__exit__ = Mock(return_value=False)
-        mock_urlopen.return_value = mock_response
-
-        auth = AuthConfig()
-        client = ContentClient("http://example.com", auth)
-
-        result = client.fetch_content()
-
-        assert result is None
-        assert client.consecutive_errors == 1
-
-    def test_client_reset_poll_timer(self):
-        """Test resetting poll timer."""
-        auth = AuthConfig()
-        client = ContentClient("http://example.com", auth)
-
-        client.reset_poll_timer()
-        assert client.last_poll_time is not None
-
-
-# =============================================================================
-# ErrorHandler Tests
-# =============================================================================
-
-
-class TestErrorHandler:
-    """Test ErrorHandler class."""
-
-    def test_handler_keep_last(self):
-        """Test keep_last fallback."""
-        handler = ErrorHandler(ErrorFallback.KEEP_LAST)
-
-        # No previous content
-        assert handler.get_fallback_response() is None
-
-        # With previous content
-        content = create_test_content()
-        response = ContentResponse(
-            status=ResponseStatus.UPDATED, content=content, poll_interval_ms=30000
-        )
-        handler.set_last_successful(response)
-
-        fallback = handler.get_fallback_response()
-        assert fallback is not None
-        assert fallback.content is not None
-        assert fallback.content.content_id == content.content_id
-
-    def test_handler_blank(self):
-        """Test blank fallback."""
-        handler = ErrorHandler(ErrorFallback.BLANK)
-
-        fallback = handler.get_fallback_response()
-        assert fallback is not None
-        assert fallback.status == ResponseStatus.CLEAR
-
-    def test_handler_error_message(self):
-        """Test error_message fallback."""
-        handler = ErrorHandler(ErrorFallback.ERROR_MESSAGE)
-
-        fallback = handler.get_fallback_response()
-        assert fallback is not None
-        assert fallback.status == ResponseStatus.CLEAR
-        # In the future this might generate an error message frame
+        content = create_test_content("test")
+        queue.set_playlist([content])
+        assert queue.has_content()
+
+        queue.set_playlist([])
+        assert not queue.has_content()
 
 
 # =============================================================================
@@ -1197,54 +872,37 @@ class TestDriverConfig:
 
     def test_config_minimal(self):
         """Test minimal valid configuration."""
-        config = DriverConfig(poll_endpoint="http://localhost:8000")
-        assert config.poll_endpoint == "http://localhost:8000"
-        assert config.enable_push is False
-        assert config.dev_mode is False
+        config = DriverConfig(convex_url="https://example.convex.cloud")
+        assert config.convex_url == "https://example.convex.cloud"
 
     def test_config_full(self):
         """Test full configuration."""
         config = DriverConfig(
-            poll_endpoint="http://example.com",
-            poll_interval_ms=60000,
-            enable_push=True,
-            push_port=9000,
-            push_host="127.0.0.1",
-            auth=AuthConfig(type="api_key", key="secret"),
+            convex_url="https://example.convex.cloud",
+            display_name="test-display",
             serial_device="/dev/ttyUSB0",
             serial_baudrate=115200,
             module_layout=[[1, 2], [3, 4]],
             module_width=14,
             module_height=8,
-            error_fallback=ErrorFallback.BLANK,
             dev_mode=True,
             log_level="DEBUG",
         )
 
-        assert config.poll_interval_ms == 60000
-        assert config.push_port == 9000
+        assert config.convex_url == "https://example.convex.cloud"
+        assert config.display_name == "test-display"
+        assert config.serial_device == "/dev/ttyUSB0"
         assert config.serial_baudrate == 115200
+        assert config.module_layout == [[1, 2], [3, 4]]
         assert config.module_width == 14
-        assert config.error_fallback == ErrorFallback.BLANK
+        assert config.module_height == 8
+        assert config.dev_mode is True
         assert config.log_level == "DEBUG"
-
-    def test_config_invalid_poll_interval(self):
-        """Test invalid poll interval."""
-        with pytest.raises(ValueError):
-            DriverConfig(poll_endpoint="http://example.com", poll_interval_ms=500)
-
-    def test_config_invalid_port(self):
-        """Test invalid port numbers."""
-        with pytest.raises(ValueError):
-            DriverConfig(poll_endpoint="http://example.com", push_port=0)
-
-        with pytest.raises(ValueError):
-            DriverConfig(poll_endpoint="http://example.com", push_port=70000)
 
     def test_config_serialization(self):
         """Test config serialization."""
         config = DriverConfig(
-            poll_endpoint="http://example.com",
+            convex_url="https://example.convex.cloud",
             serial_device="/dev/ttyUSB0",
             module_layout=[[1], [2]],
         )
@@ -1252,142 +910,5 @@ class TestDriverConfig:
         json_str = config.model_dump_json()
         parsed = DriverConfig.model_validate_json(json_str)
 
-        assert parsed.poll_endpoint == config.poll_endpoint
+        assert parsed.convex_url == config.convex_url
         assert parsed.serial_device == config.serial_device
-
-
-# =============================================================================
-# PushServer Tests
-# =============================================================================
-
-
-class TestPushServer:
-    """Test PushServer."""
-
-    def test_server_initialization(self):
-        """Test server initialization."""
-        auth = AuthConfig(type="api_key", key="test")
-        callback = Mock()
-
-        server = PushServer("127.0.0.1", 8888, auth, callback)
-
-        assert server.host == "127.0.0.1"
-        assert server.port == 8888
-        assert server.running is False
-
-    def test_server_start_stop(self):
-        """Test starting and stopping server."""
-        auth = AuthConfig(type="api_key", key="test")
-        callback = Mock()
-
-        server = PushServer("127.0.0.1", 0, auth, callback)  # Port 0 = random port
-        server.start()
-
-        time.sleep(0.1)
-        assert server.running is True
-
-        server.stop()
-        time.sleep(0.1)
-        assert server.running is False
-
-
-# =============================================================================
-# Integration Tests
-# =============================================================================
-
-
-class TestIntegration:
-    """Integration tests for complete workflows."""
-
-    def test_full_frame_pipeline(self):
-        """Test complete pipeline from frame creation to serial output."""
-        # Create a frame
-        width, height = 28, 7
-        bits = [1 if (i + j) % 2 else 0 for i in range(height) for j in range(width)]
-        packed = pack_bits_little_endian(bits)
-        b64 = base64.b64encode(packed).decode()
-
-        frame = Frame(
-            data_b64=b64, width=width, height=height, duration_ms=None
-        )  # No duration
-
-        # Create content
-        content = Content(
-            content_id="test",
-            frames=[frame],
-            playback=PlaybackMode(loop=False, priority=0),
-        )
-
-        # Add to queue
-        queue = ContentQueue()
-        queue.add_content(content)
-
-        # Get frame from queue (should be available immediately)
-        # For StaticDisplayMode-like content (single frame, no loop),
-        # we get the current frame before update marks it complete
-        assert queue.current is not None
-        current_frame = queue.current.current_frame
-        assert current_frame is not None
-
-        # Convert to serial data
-        panel = Panel(layout=[[1]], module_width=width, module_height=height)
-        serial_data = panel.set_content_from_frame(
-            current_frame.decode_data(), width, height
-        )
-
-        # Verify serial data structure
-        assert len(serial_data) > 0
-        assert serial_data[0:2] == bytes([0x80, 0x83])
-        assert serial_data[-1] == 0x8F
-
-    def test_interrupt_and_resume_workflow(self):
-        """Test interrupt and resume workflow."""
-        queue = ContentQueue()
-
-        # Add base content
-        base_frame = create_test_frame(duration_ms=50)
-        base = Content(
-            content_id="base",
-            frames=[base_frame] * 10,
-            playback=PlaybackMode(loop=True, priority=0, interruptible=True),
-        )
-        queue.add_content(base)
-
-        # Advance a few frames
-        time.sleep(0.06)
-        queue.update()
-
-        # Interrupt with notification
-        notif_frame = create_test_frame(duration_ms=20)
-        notif = Content(
-            content_id="notification",
-            frames=[notif_frame],
-            playback=PlaybackMode(loop=False, priority=10),
-        )
-        queue.add_content(notif)
-
-        # Should be showing notification
-        assert queue.get_current_content_id() == "notification"
-
-        # Wait for notification to complete
-        time.sleep(0.03)
-        queue.update()
-
-        # Should resume base content
-        assert queue.get_current_content_id() == "base"
-
-    def test_content_response_to_queue_pipeline(self):
-        """Test processing content response into queue."""
-        # Simulate server response
-        content = create_test_content("clock")
-        response = ContentResponse(
-            status=ResponseStatus.UPDATED, content=content, poll_interval_ms=30000
-        )
-
-        # Process response
-        queue = ContentQueue()
-        if response.status == ResponseStatus.UPDATED and response.content:
-            queue.add_content(response.content)
-
-        assert queue.has_content()
-        assert queue.get_current_content_id() == "clock"
