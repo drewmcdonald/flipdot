@@ -259,10 +259,22 @@ class ErrorFallback(str, Enum):
 class DriverConfig(BaseModel):
     """Configuration for the flipdot driver."""
 
-    # Server configuration
-    poll_endpoint: str = Field(..., description="URL to poll for content updates")
+    # Server configuration (HTTP polling - legacy)
+    poll_endpoint: str | None = Field(
+        default=None,
+        description="URL to poll for content updates (not needed if using Convex)",
+    )
     poll_interval_ms: int = Field(
         default=30000, ge=1000, description="Default polling interval"
+    )
+
+    # Convex configuration (real-time)
+    convex_url: str | None = Field(
+        default=None,
+        description="Convex deployment URL. If set, uses Convex instead of HTTP.",
+    )
+    display_name: str = Field(
+        default="main", description="Display name to subscribe to in Convex"
     )
 
     # Authentication

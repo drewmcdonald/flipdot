@@ -1,0 +1,39 @@
+.virtual-display-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.virtual-display-frame {
+  background: #0a0a0a;
+  border: 4px solid #333;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.5),
+    0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.virtual-display-canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.virtual-display-status {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.status-loading {
+  color: #888;
+}
+
+.status-empty {
+  color: #ff6b6b;
+}
+
+.status-connected {
+  color: #4caf50;
+}

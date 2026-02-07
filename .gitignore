@@ -45,3 +45,5 @@ graveyard/
 .pytest_cache/
 .local-storage
 **/.vt
+
+node_modules/

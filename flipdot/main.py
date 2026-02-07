@@ -28,6 +28,7 @@ from flipdot.queue import ContentQueue
 
 if TYPE_CHECKING:
     from flipdot.config import DriverLimits
+    from flipdot.convex_client import ConvexContentClient
 
 logger = logging.getLogger(__name__)
 
@@ -78,26 +79,57 @@ class FlipDotDriver:
 
         # Initialize content management
         self.queue = ContentQueue(limits=limits)
-        self.client = ContentClient(
-            endpoint=config.poll_endpoint,
-            auth=config.auth,
-            limits=limits,
-        )
+        self._convex_client: ConvexContentClient | None = None
+        self._http_client: ContentClient | None = None
+
+        if config.convex_url:
+            from .convex_client import ConvexContentClient as ConvexClientImpl
+
+            self._convex_client = ConvexClientImpl(
+                config.convex_url, config.display_name
+            )
+            self._convex_client.start()
+        else:
+            if not config.poll_endpoint:
+                raise ValueError(
+                    "Either convex_url or poll_endpoint must be configured"
+                )
+            self._http_client = ContentClient(
+                endpoint=config.poll_endpoint,
+                auth=config.auth,
+                limits=limits,
+            )
+
         self.error_handler = ErrorHandler(fallback=config.error_fallback)
 
-    def _poll_for_content(self) -> None:
-        """Poll the server for content updates."""
-        if not self.client.should_poll():
-            return
+    def _poll_for_content(self, timeout: float = 0.0) -> None:
+        """
+        Check for content updates.
 
-        response = self.client.fetch_content()
-
-        if response is None:
-            # Handle error
-            logger.warning("Failed to fetch content, using fallback")
-            response = self.error_handler.get_fallback_response()
+        Args:
+            timeout: For Convex mode, max seconds to block waiting for updates.
+                     For HTTP mode, this is ignored (uses internal poll timing).
+        """
+        # Convex mode: wait for pushed updates (blocks up to timeout)
+        if self._convex_client is not None:
+            response = self._convex_client.wait_for_update(timeout)
             if response is None:
                 return
+        elif self._http_client is not None:
+            # HTTP mode: poll if it's time
+            if not self._http_client.should_poll():
+                return
+
+            response = self._http_client.fetch_content()
+
+            if response is None:
+                # Handle error
+                logger.warning("Failed to fetch content, using fallback")
+                response = self.error_handler.get_fallback_response()
+                if response is None:
+                    return
+        else:
+            return
 
         # Record successful fetch
         if response.playlist:
@@ -175,17 +207,20 @@ class FlipDotDriver:
 
         # Main loop
         try:
+            sleep_seconds = self._calculate_next_sleep_ms()
+
             while self.running:
-                # Poll for new content
-                self._poll_for_content()
+                # Check for new content
+                # Convex mode: blocks up to sleep_seconds, wakes instantly on update
+                # HTTP mode: checks if poll is due (non-blocking)
+                self._poll_for_content(timeout=sleep_seconds)
 
                 # Render current frame
                 self._render_frame()
 
-                # Sleep until the next event (frame change or poll time)
-                # This prevents busy-waiting and reduces CPU usage
-                sleep_seconds = self._calculate_next_sleep_ms()
-                time.sleep(sleep_seconds)
+                # HTTP mode needs explicit sleep; Convex mode already waited above
+                if self._http_client is not None:
+                    time.sleep(sleep_seconds)
 
         except KeyboardInterrupt:
             logger.info("Received interrupt signal")
@@ -205,6 +240,10 @@ class FlipDotDriver:
         # Clear display
         logger.info("Clearing display...")
         self._clear_display()
+
+        # Close Convex client if using real-time mode
+        if self._convex_client is not None:
+            self._convex_client.close()
 
         # Close serial connection
         self.serial.close()

@@ -10,6 +10,7 @@ license = "MIT"
 python = "^3.11"
 pyserial = "^3.5"
 pydantic = "^2.10.6"
+convex = "^0.7.0"
 
 [tool.poetry.group.dev.dependencies]
 typing-extensions = "^4.12.2"
