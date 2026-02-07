@@ -3,8 +3,9 @@ Comprehensive tests for the flipdot driver implementation.
 """
 
 import base64
+import json
 import time
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -912,3 +913,630 @@ class TestDriverConfig:
 
         assert parsed.convex_url == config.convex_url
         assert parsed.serial_device == config.serial_device
+
+
+# =============================================================================
+# Content Validation / Security Limit Tests
+# =============================================================================
+
+
+class TestContentValidation:
+    """Tests for content security limits and validation."""
+
+    def test_max_frames_per_content_exceeded(self):
+        """Test that exceeding MAX_FRAMES_PER_CONTENT raises an error."""
+        num_frames = Content.MAX_FRAMES_PER_CONTENT + 1
+        frames = [create_test_frame() for _ in range(num_frames)]
+        with pytest.raises(ValueError, match="Too many frames"):
+            Content(content_id="too-many-frames", frames=frames)
+
+    def test_max_frames_per_content_at_limit(self):
+        """Test that exactly MAX_FRAMES_PER_CONTENT is allowed."""
+        num_frames = Content.MAX_FRAMES_PER_CONTENT
+        frames = [create_test_frame() for _ in range(num_frames)]
+        content = Content(content_id="at-limit", frames=frames)
+        assert len(content.frames) == num_frames
+
+    def test_max_total_bytes_exceeded(self):
+        """Test that exceeding MAX_TOTAL_BYTES raises an error."""
+        # 1024x1024 = 131072 bytes per frame. Need enough frames to exceed 5MB.
+        width, height = 1024, 1024
+        bits = [0] * (width * height)
+        packed = pack_bits_little_endian(bits)
+        b64 = base64.b64encode(packed).decode()
+        frame = Frame(data_b64=b64, width=width, height=height, duration_ms=100)
+
+        frame_size = len(packed)
+        num_frames = (Content.MAX_TOTAL_BYTES // frame_size) + 1
+        frames = [frame] * num_frames
+
+        with pytest.raises(ValueError, match="Content too large"):
+            Content(content_id="too-large", frames=frames)
+
+    def test_max_metadata_bytes_exceeded_on_frame(self):
+        """Test that frame metadata exceeding MAX_METADATA_BYTES raises an error."""
+        large_value = "x" * (Content.MAX_METADATA_BYTES + 1)
+        frame = create_test_frame()
+        bits = [1, 0] * ((frame.width * frame.height) // 2)
+        packed = pack_bits_little_endian(bits[: frame.width * frame.height])
+        b64 = base64.b64encode(packed).decode()
+
+        large_metadata: dict[str, object] = {"large_key": large_value}
+        oversized_frame = Frame(
+            data_b64=b64,
+            width=frame.width,
+            height=frame.height,
+            duration_ms=100,
+            metadata=large_metadata,
+        )
+
+        with pytest.raises(ValueError, match="metadata too large"):
+            Content(content_id="big-meta", frames=[oversized_frame])
+
+    def test_max_metadata_bytes_exceeded_on_content(self):
+        """Test that content-level metadata exceeding MAX_METADATA_BYTES raises."""
+        large_value = "x" * (Content.MAX_METADATA_BYTES + 1)
+        large_metadata: dict[str, object] = {"large_key": large_value}
+        frame = create_test_frame()
+
+        with pytest.raises(ValueError, match="Content metadata too large"):
+            Content(
+                content_id="big-content-meta",
+                frames=[frame],
+                metadata=large_metadata,
+            )
+
+    def test_inconsistent_frame_dimensions(self):
+        """Test that frames with different dimensions raise an error."""
+        frame_2x2 = create_test_frame(width=2, height=2)
+        frame_3x3 = create_test_frame(width=3, height=3)
+
+        with pytest.raises(ValueError, match="dimensions"):
+            Content(content_id="mismatched", frames=[frame_2x2, frame_3x3])
+
+    def test_validate_display_dimensions_match(self):
+        """Test validate_display_dimensions passes with matching dimensions."""
+        content = create_test_content()
+        frame = content.frames[0]
+        content.validate_display_dimensions(frame.width, frame.height)
+
+    def test_validate_display_dimensions_mismatch(self):
+        """Test validate_display_dimensions raises with mismatched dimensions."""
+        content = create_test_content()
+        with pytest.raises(ValueError, match="frame dimensions"):
+            content.validate_display_dimensions(999, 999)
+
+
+# =============================================================================
+# PlaybackMode Validation Tests
+# =============================================================================
+
+
+class TestPlaybackModeValidation:
+    """Tests for PlaybackMode validation rules."""
+
+    def test_loop_count_with_loop_false_raises(self):
+        """Test that setting loop_count with loop=False raises ValueError."""
+        with pytest.raises(ValueError, match="loop_count can only be set when loop=True"):
+            PlaybackMode(loop=False, loop_count=5)
+
+    def test_loop_count_with_loop_true_allowed(self):
+        """Test that setting loop_count with loop=True is valid."""
+        mode = PlaybackMode(loop=True, loop_count=5)
+        assert mode.loop_count == 5
+
+    def test_loop_count_none_with_loop_false_allowed(self):
+        """Test that loop_count=None with loop=False is valid."""
+        mode = PlaybackMode(loop=False, loop_count=None)
+        assert mode.loop_count is None
+
+
+# =============================================================================
+# Serial Reconnection Tests
+# =============================================================================
+
+
+class TestSerialReconnection:
+    """Tests for serial reconnection and error handling logic."""
+
+    def test_should_attempt_reconnect_timing(self):
+        """Test _should_attempt_reconnect respects backoff timing."""
+        conn = SerialConnection(dev_mode=True)
+        conn.dev_mode = False
+        conn.device = "/dev/fake"
+        conn.reconnect_backoff_ms = 1000
+
+        # Just attempted: should not reconnect
+        conn.last_reconnect_attempt = time.time()
+        assert conn._should_attempt_reconnect() is False
+
+        # Long ago: should reconnect
+        conn.last_reconnect_attempt = time.time() - 10
+        assert conn._should_attempt_reconnect() is True
+
+    @patch("flipdot.hardware.serial.Serial")
+    def test_try_reconnect_success(self, mock_serial_class):
+        """Test _try_reconnect succeeds when serial connects."""
+        mock_serial_class.return_value = Mock()
+        conn = SerialConnection(dev_mode=True)
+        conn.dev_mode = False
+        conn.device = "/dev/fake"
+        conn.baudrate = 57600
+        conn._serial = None
+        conn.last_reconnect_attempt = 0.0
+        conn.reconnect_backoff_ms = 0
+
+        result = conn._try_reconnect()
+        assert result is True
+        assert conn._serial is not None
+        assert conn.consecutive_failures == 0
+
+    @patch("flipdot.hardware.serial.Serial")
+    def test_try_reconnect_failure_increases_backoff(self, mock_serial_class):
+        """Test _try_reconnect fails and increases backoff."""
+        mock_serial_class.side_effect = OSError("no device")
+        conn = SerialConnection(dev_mode=True)
+        conn.dev_mode = False
+        conn.device = "/dev/fake"
+        conn.baudrate = 57600
+        conn._serial = None
+        conn.last_reconnect_attempt = 0.0
+        initial_backoff = conn.reconnect_backoff_ms
+
+        result = conn._try_reconnect()
+        assert result is False
+        assert conn._serial is None
+        assert conn.reconnect_backoff_ms == min(
+            initial_backoff * 2, conn.limits.serial.max_reconnect_backoff_ms
+        )
+
+    def test_try_reconnect_respects_backoff(self):
+        """Test _try_reconnect returns False when backoff hasn't elapsed."""
+        conn = SerialConnection(dev_mode=True)
+        conn.dev_mode = False
+        conn.device = "/dev/fake"
+        conn.reconnect_backoff_ms = 60000
+        conn.last_reconnect_attempt = time.time()
+
+        result = conn._try_reconnect()
+        assert result is False
+
+    @patch("flipdot.hardware.serial.Serial")
+    def test_write_incomplete_write(self, mock_serial_class):
+        """Test write returns False on incomplete write."""
+        mock_serial = Mock()
+        mock_serial.write.return_value = 2  # Only 2 of 5 bytes written
+        mock_serial_class.return_value = mock_serial
+
+        conn = SerialConnection(device="/dev/fake", baudrate=57600, dev_mode=False)
+        result = conn.write(b"hello")
+        assert result is False
+        assert conn.consecutive_failures == 1
+
+    @patch("flipdot.hardware.serial.Serial")
+    def test_write_exception_closes_serial(self, mock_serial_class):
+        """Test write handles OSError by closing serial and marking for reconnect."""
+        mock_serial = Mock()
+        mock_serial.write.side_effect = OSError("device disconnected")
+        mock_serial_class.return_value = mock_serial
+
+        conn = SerialConnection(device="/dev/fake", baudrate=57600, dev_mode=False)
+        result = conn.write(b"hello")
+
+        assert result is False
+        assert conn.consecutive_failures == 1
+        assert conn._serial is None
+        mock_serial.close.assert_called_once()
+
+    @patch("flipdot.hardware.serial.Serial")
+    def test_write_consecutive_failures_accumulate(self, mock_serial_class):
+        """Test that consecutive write failures accumulate the failure counter."""
+        mock_serial = Mock()
+        mock_serial.write.side_effect = OSError("device disconnected")
+        mock_serial_class.return_value = mock_serial
+
+        conn = SerialConnection(device="/dev/fake", baudrate=57600, dev_mode=False)
+
+        conn.write(b"hello")
+        assert conn.consecutive_failures == 1
+
+        # After the first OSError, _serial is None and _try_reconnect is called.
+        # Make reconnect fail so failures accumulate without being reset.
+        mock_serial_class.side_effect = OSError("still no device")
+
+        conn.write(b"hello")
+        assert conn.consecutive_failures == 2
+
+        conn.write(b"hello")
+        assert conn.consecutive_failures == 3
+
+    @patch("flipdot.hardware.serial.Serial")
+    def test_write_success_resets_failures(self, mock_serial_class):
+        """Test that a successful write resets the failure counter."""
+        mock_serial = Mock()
+        mock_serial.write.return_value = 5
+        mock_serial_class.return_value = mock_serial
+
+        conn = SerialConnection(device="/dev/fake", baudrate=57600, dev_mode=False)
+        conn.consecutive_failures = 5
+
+        result = conn.write(b"hello")
+        assert result is True
+        assert conn.consecutive_failures == 0
+
+
+# =============================================================================
+# FlipDotDriver Tests
+# =============================================================================
+
+
+class TestFlipDotDriver:
+    """Tests for the main FlipDotDriver class."""
+
+    def _make_config(self, **overrides: object) -> DriverConfig:
+        """Create a DriverConfig with dev_mode defaults for testing."""
+        defaults: dict[str, object] = {
+            "convex_url": "https://test.convex.cloud",
+            "display_name": "test-display",
+            "dev_mode": True,
+            "module_layout": [[1]],
+            "module_width": 2,
+            "module_height": 2,
+            "log_level": "WARNING",
+        }
+        defaults.update(overrides)
+        return DriverConfig(**defaults)
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_init_wires_up_components(self, mock_convex_cls: MagicMock) -> None:
+        """__init__ creates Panel, SerialConnection, ContentQueue, and ConvexContentClient."""
+        from flipdot.main import FlipDotDriver
+
+        config = self._make_config()
+        driver = FlipDotDriver(config)
+
+        # Panel created with correct layout
+        assert driver.panel.n_rows == 1
+        assert driver.panel.n_cols == 1
+        height, width = driver.panel.dimensions
+        assert width == 2
+        assert height == 2
+
+        # Serial is in dev_mode
+        assert driver.serial.dev_mode is True
+
+        # Queue initialised
+        assert driver.queue is not None
+        assert not driver.queue.has_content()
+
+        # ConvexContentClient constructed and started
+        mock_convex_cls.assert_called_once_with(
+            "https://test.convex.cloud", "test-display"
+        )
+        mock_convex_cls.return_value.start.assert_called_once()
+
+        # running starts False
+        assert driver.running is False
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_init_uses_default_limits(self, mock_convex_cls: MagicMock) -> None:
+        """__init__ without explicit limits uses DEFAULT_LIMITS."""
+        from flipdot.config import DEFAULT_LIMITS
+        from flipdot.main import FlipDotDriver
+
+        driver = FlipDotDriver(self._make_config())
+        assert driver.limits is DEFAULT_LIMITS
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_init_uses_custom_limits(self, mock_convex_cls: MagicMock) -> None:
+        """__init__ with explicit limits uses those limits."""
+        from flipdot.config import DriverLimits, LoopTiming
+        from flipdot.main import FlipDotDriver
+
+        custom = DriverLimits(loop=LoopTiming(sleep_interval_seconds=0.5))
+        driver = FlipDotDriver(self._make_config(), limits=custom)
+        assert driver.limits is custom
+        assert driver.limits.loop.sleep_interval_seconds == 0.5
+
+    # -- _poll_for_content ------------------------------------------------
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_poll_for_content_with_update(self, mock_convex_cls: MagicMock) -> None:
+        """_poll_for_content sets playlist on queue when UPDATED."""
+        from flipdot.main import FlipDotDriver
+
+        config = self._make_config()
+        driver = FlipDotDriver(config)
+
+        content = create_test_content("c1")
+        response = ContentResponse(
+            status=ResponseStatus.UPDATED, playlist=[content]
+        )
+        driver._convex_client.wait_for_update.return_value = response
+
+        driver._poll_for_content(timeout=0.0)
+
+        assert driver.queue.has_content()
+        assert driver.queue.get_current_content_id() == "c1"
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_poll_for_content_rejects_bad_dimensions(
+        self, mock_convex_cls: MagicMock
+    ) -> None:
+        """_poll_for_content rejects playlist with mismatched dimensions."""
+        from flipdot.main import FlipDotDriver
+
+        config = self._make_config(module_width=2, module_height=2)
+        driver = FlipDotDriver(config)
+
+        # Create content with dimensions that don't match the 2x2 display
+        wrong_content = create_test_content("bad")
+        # Manually override frame dimensions to trigger mismatch
+        wrong_content.frames[0].width = 99
+        wrong_content.frames[0].height = 99
+
+        response = ContentResponse(
+            status=ResponseStatus.UPDATED, playlist=[wrong_content]
+        )
+        driver._convex_client.wait_for_update.return_value = response
+
+        driver._poll_for_content(timeout=0.0)
+
+        # Queue should remain empty because dimensions didn't match
+        assert not driver.queue.has_content()
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_poll_for_content_with_clear(self, mock_convex_cls: MagicMock) -> None:
+        """_poll_for_content clears queue and display on CLEAR status."""
+        from flipdot.main import FlipDotDriver
+
+        config = self._make_config()
+        driver = FlipDotDriver(config)
+
+        # Pre-populate queue
+        driver.queue.set_playlist([create_test_content("c1")])
+        assert driver.queue.has_content()
+
+        response = ContentResponse(status=ResponseStatus.CLEAR, playlist=[])
+        driver._convex_client.wait_for_update.return_value = response
+
+        driver._poll_for_content(timeout=0.0)
+
+        assert not driver.queue.has_content()
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_poll_for_content_none_response(self, mock_convex_cls: MagicMock) -> None:
+        """_poll_for_content does nothing when response is None."""
+        from flipdot.main import FlipDotDriver
+
+        driver = FlipDotDriver(self._make_config())
+        driver._convex_client.wait_for_update.return_value = None
+
+        driver._poll_for_content(timeout=0.0)
+        assert not driver.queue.has_content()
+
+    # -- _clear_display ---------------------------------------------------
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    @patch("flipdot.hardware.serial.Serial")
+    def test_clear_display_writes_blank_frame(
+        self, mock_serial_cls: MagicMock, mock_convex_cls: MagicMock
+    ) -> None:
+        """_clear_display writes an all-zero frame to serial."""
+        from flipdot.main import FlipDotDriver
+
+        config = self._make_config(
+            dev_mode=False, serial_device="/dev/ttyFAKE"
+        )
+        driver = FlipDotDriver(config)
+        mock_serial_instance = mock_serial_cls.return_value
+
+        driver._clear_display()
+
+        mock_serial_instance.write.assert_called_once()
+        data = mock_serial_instance.write.call_args[0][0]
+        assert isinstance(data, bytes)
+        assert len(data) > 0
+
+    # -- _render_frame ----------------------------------------------------
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_render_frame_writes_to_serial(self, mock_convex_cls: MagicMock) -> None:
+        """_render_frame gets frame from queue and writes to serial."""
+        from flipdot.main import FlipDotDriver
+
+        config = self._make_config()
+        driver = FlipDotDriver(config)
+
+        content = create_test_content("c1")
+        driver.queue.set_playlist([content])
+
+        # Mock serial write
+        driver.serial.write = MagicMock(return_value=True)
+
+        driver._render_frame()
+
+        driver.serial.write.assert_called_once()
+        written = driver.serial.write.call_args[0][0]
+        assert isinstance(written, bytes)
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_render_frame_empty_queue_noop(self, mock_convex_cls: MagicMock) -> None:
+        """_render_frame does nothing when queue is empty."""
+        from flipdot.main import FlipDotDriver
+
+        driver = FlipDotDriver(self._make_config())
+        driver.serial.write = MagicMock()
+
+        driver._render_frame()
+
+        driver.serial.write.assert_not_called()
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_render_frame_handles_serial_failure(
+        self, mock_convex_cls: MagicMock
+    ) -> None:
+        """_render_frame logs error but does not raise when serial write fails."""
+        from flipdot.main import FlipDotDriver
+
+        driver = FlipDotDriver(self._make_config())
+        content = create_test_content("c1")
+        driver.queue.set_playlist([content])
+        driver.serial.write = MagicMock(return_value=False)
+
+        # Should not raise
+        driver._render_frame()
+
+        driver.serial.write.assert_called_once()
+
+    # -- _calculate_next_sleep_s ------------------------------------------
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_calculate_next_sleep_s_default(self, mock_convex_cls: MagicMock) -> None:
+        """_calculate_next_sleep_s returns the configured interval."""
+        from flipdot.main import FlipDotDriver
+
+        driver = FlipDotDriver(self._make_config())
+        result = driver._calculate_next_sleep_s()
+        assert result == driver.limits.loop.sleep_interval_seconds
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_calculate_next_sleep_s_custom(self, mock_convex_cls: MagicMock) -> None:
+        """_calculate_next_sleep_s respects custom limits."""
+        from flipdot.config import DriverLimits, LoopTiming
+        from flipdot.main import FlipDotDriver
+
+        custom = DriverLimits(loop=LoopTiming(sleep_interval_seconds=1.5))
+        driver = FlipDotDriver(self._make_config(), limits=custom)
+        assert driver._calculate_next_sleep_s() == 1.5
+
+    # -- start / stop lifecycle -------------------------------------------
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_start_and_stop_lifecycle(self, mock_convex_cls: MagicMock) -> None:
+        """start() runs the loop and stop() cleanly shuts down."""
+        from flipdot.main import FlipDotDriver
+
+        driver = FlipDotDriver(self._make_config())
+        mock_client = driver._convex_client
+
+        # Use stop() to break the loop, which is the normal shutdown path.
+        call_count = 0
+
+        def side_effect(timeout: float) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count >= 2:
+                driver.stop()
+            return None
+
+        mock_client.wait_for_update.side_effect = side_effect
+
+        driver.serial.write = MagicMock(return_value=True)
+        driver.serial.close = MagicMock()
+
+        driver.start()
+
+        # After start returns, driver should be stopped
+        assert driver.running is False
+        mock_client.close.assert_called_once()
+        driver.serial.close.assert_called_once()
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_stop_idempotent(self, mock_convex_cls: MagicMock) -> None:
+        """Calling stop() when not running is a no-op."""
+        from flipdot.main import FlipDotDriver
+
+        driver = FlipDotDriver(self._make_config())
+        assert driver.running is False
+
+        # Should not raise
+        driver.stop()
+        driver.stop()
+
+        # close() should not have been called since running was False
+        driver._convex_client.close.assert_not_called()
+
+    @patch("flipdot.convex_client.ConvexContentClient")
+    def test_stop_clears_display_and_closes(self, mock_convex_cls: MagicMock) -> None:
+        """stop() clears display, closes convex client and serial."""
+        from flipdot.main import FlipDotDriver
+
+        driver = FlipDotDriver(self._make_config())
+        driver.running = True
+
+        driver.serial.write = MagicMock(return_value=True)
+        driver.serial.close = MagicMock()
+
+        driver.stop()
+
+        assert driver.running is False
+        # _clear_display writes to serial
+        driver.serial.write.assert_called()
+        driver.serial.close.assert_called_once()
+        driver._convex_client.close.assert_called_once()
+
+
+# =============================================================================
+# load_config Tests
+# =============================================================================
+
+
+class TestLoadConfig:
+    """Tests for the load_config function."""
+
+    def test_load_config_valid(self, tmp_path: object) -> None:
+        """load_config loads a valid JSON config file."""
+        from pathlib import Path
+
+        from flipdot.main import load_config
+
+        p = Path(str(tmp_path)) / "config.json"
+        data = {
+            "convex_url": "https://test.convex.cloud",
+            "display_name": "my-display",
+            "dev_mode": True,
+            "module_layout": [[1, 2]],
+            "module_width": 28,
+            "module_height": 7,
+        }
+        p.write_text(json.dumps(data))
+
+        config = load_config(str(p))
+
+        assert config.convex_url == "https://test.convex.cloud"
+        assert config.display_name == "my-display"
+        assert config.dev_mode is True
+        assert config.module_layout == [[1, 2]]
+
+    def test_load_config_missing_file(self) -> None:
+        """load_config raises FileNotFoundError for missing file."""
+        from flipdot.main import load_config
+
+        with pytest.raises(FileNotFoundError, match="Config file not found"):
+            load_config("/no/such/path/config.json")
+
+    def test_load_config_invalid_json(self, tmp_path: object) -> None:
+        """load_config raises error for invalid JSON."""
+        from pathlib import Path
+
+        from flipdot.main import load_config
+
+        p = Path(str(tmp_path)) / "bad.json"
+        p.write_text("not json at all {{{")
+
+        with pytest.raises(Exception):
+            load_config(str(p))
+
+    def test_load_config_missing_required_fields(self, tmp_path: object) -> None:
+        """load_config raises validation error when required fields are missing."""
+        from pathlib import Path
+
+        from flipdot.main import load_config
+
+        p = Path(str(tmp_path)) / "partial.json"
+        # Missing required convex_url
+        p.write_text(json.dumps({"dev_mode": True}))
+
+        with pytest.raises(Exception):
+            load_config(str(p))
