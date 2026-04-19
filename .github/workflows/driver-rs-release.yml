@@ -1,0 +1,112 @@
+name: driver-rs release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag (e.g., driver-rs-v0.1.0)"
+        required: true
+        type: string
+  push:
+    tags:
+      - "driver-rs-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-unknown-linux-gnu
+            cross: true
+          - target: armv7-unknown-linux-gnueabihf
+            cross: true
+          - target: x86_64-unknown-linux-gnu
+            cross: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            driver-rs/target
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('driver-rs/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.target }}-
+
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --locked --version 0.2.5
+
+      - name: Build (cross)
+        if: matrix.cross
+        working-directory: driver-rs
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build (native)
+        if: ${{ !matrix.cross }}
+        working-directory: driver-rs
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Stage artifact
+        run: |
+          mkdir -p artifacts
+          cp "driver-rs/target/${{ matrix.target }}/release/flipdot" \
+             "artifacts/flipdot-${{ matrix.target }}"
+          (cd artifacts && sha256sum "flipdot-${{ matrix.target }}" > "flipdot-${{ matrix.target }}.sha256")
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flipdot-${{ matrix.target }}
+          path: artifacts/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Stage release assets
+        run: |
+          cp driver-rs/install-rpi.sh dist/install-rpi.sh
+          cp driver-rs/flipdot.service dist/flipdot.service
+          chmod +x dist/install-rpi.sh
+          ls -la dist/
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.tag.outputs.tag }}" \
+            --title "driver-rs ${{ steps.tag.outputs.tag }}" \
+            --generate-notes \
+            dist/*

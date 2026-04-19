@@ -47,17 +47,11 @@ impl Frame {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
 pub struct PlaybackMode {
     #[serde(rename = "loop")]
     pub looping: bool,
     pub loop_count: Option<u32>,
-}
-
-impl Default for PlaybackMode {
-    fn default() -> Self {
-        Self { looping: false, loop_count: None }
-    }
 }
 
 impl<'de> Deserialize<'de> for PlaybackMode {
@@ -80,7 +74,10 @@ impl<'de> Deserialize<'de> for PlaybackMode {
                 ));
             }
         }
-        Ok(PlaybackMode { looping: raw.looping, loop_count: raw.loop_count })
+        Ok(PlaybackMode {
+            looping: raw.looping,
+            loop_count: raw.loop_count,
+        })
     }
 }
 
@@ -146,9 +143,7 @@ impl<'de> Deserialize<'de> for Content {
                 .map_err(|e| D::Error::custom(format!("frame {i}: {e}")))?;
             total_bytes += data.len();
             if let Some(md) = &frame.metadata {
-                let md_bytes = serde_json::to_vec(md)
-                    .map_err(D::Error::custom)?
-                    .len();
+                let md_bytes = serde_json::to_vec(md).map_err(D::Error::custom)?.len();
                 if md_bytes > MAX_METADATA_BYTES {
                     return Err(D::Error::custom(format!(
                         "frame {i} metadata too large: {md_bytes} bytes exceeds limit of {MAX_METADATA_BYTES}"
@@ -202,12 +197,24 @@ pub struct DriverConfig {
     pub log_level: String,
 }
 
-fn default_display_name() -> String { "main".to_string() }
-fn default_serial_baudrate() -> u32 { 57600 }
-fn default_module_layout() -> Vec<Vec<u32>> { vec![vec![1], vec![2]] }
-fn default_module_width() -> u32 { 28 }
-fn default_module_height() -> u32 { 7 }
-fn default_log_level() -> String { "INFO".to_string() }
+fn default_display_name() -> String {
+    "main".to_string()
+}
+fn default_serial_baudrate() -> u32 {
+    57600
+}
+fn default_module_layout() -> Vec<Vec<u32>> {
+    vec![vec![1], vec![2]]
+}
+fn default_module_width() -> u32 {
+    28
+}
+fn default_module_height() -> u32 {
+    7
+}
+fn default_log_level() -> String {
+    "INFO".to_string()
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -233,12 +240,12 @@ impl<'de> Deserialize<'de> for ContentResponse {
             #[serde(default = "default_poll_interval")]
             poll_interval_ms: u32,
         }
-        fn default_poll_interval() -> u32 { 30000 }
+        fn default_poll_interval() -> u32 {
+            30000
+        }
         let raw = Raw::deserialize(d)?;
         if raw.poll_interval_ms < 1000 {
-            return Err(D::Error::custom(
-                "poll_interval_ms must be >= 1000",
-            ));
+            return Err(D::Error::custom("poll_interval_ms must be >= 1000"));
         }
         if raw.status == ResponseStatus::Updated && raw.playlist.is_empty() {
             return Err(D::Error::custom(

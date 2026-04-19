@@ -48,5 +48,8 @@ fn rejects_too_small_poll_interval() {
         "poll_interval_ms": 500,
     });
     let result: Result<ContentResponse, _> = serde_json::from_value(bad);
-    assert!(result.is_err(), "expected error for poll_interval_ms < 1000");
+    assert!(
+        result.is_err(),
+        "expected error for poll_interval_ms < 1000"
+    );
 }

@@ -27,7 +27,8 @@ fn deserializes_indefinite_duration_as_none() {
 
 #[test]
 fn rejects_invalid_base64() {
-    let bad = r#"{"data_b64":"not*base64!","width":28,"height":14,"duration_ms":null,"metadata":null}"#;
+    let bad =
+        r#"{"data_b64":"not*base64!","width":28,"height":14,"duration_ms":null,"metadata":null}"#;
     let frame: Frame = serde_json::from_str(bad).expect("structural JSON still parses");
     assert!(frame.decode_data().is_err());
 }

@@ -34,3 +34,29 @@ jobs:
         run: poetry run basedpyright flipdot
       - name: Run ruff
         run: poetry run ruff check flipdot
+
+  driver-rs-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: driver-rs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            driver-rs/target
+          key: ${{ runner.os }}-cargo-checks-${{ hashFiles('driver-rs/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-checks-
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: cargo test
+        run: cargo test --all-targets

@@ -5,12 +5,9 @@ const FIXTURE_TWO_FRAMES: &str = include_str!("fixtures/content_two_frames.json"
 fn fixture_frame(width: u32, height: u32, duration_ms: Option<u32>) -> serde_json::Value {
     // 28x14 = 392 bits = 49 bytes, all zero -> 49 zero bytes base64'd.
     // For other sizes, generate ceil(w*h/8) zero bytes.
-    let n_bytes = ((width * height) + 7) / 8;
+    let n_bytes = (width * height).div_ceil(8);
     let zero = vec![0u8; n_bytes as usize];
-    let b64 = base64::Engine::encode(
-        &base64::engine::general_purpose::STANDARD,
-        &zero,
-    );
+    let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &zero);
     serde_json::json!({
         "data_b64": b64,
         "width": width,
@@ -47,7 +44,10 @@ fn rejects_empty_frames() {
         "metadata": null,
     });
     let result: Result<Content, _> = serde_json::from_value(bad);
-    assert!(result.is_err(), "expected error for empty frames, got {result:?}");
+    assert!(
+        result.is_err(),
+        "expected error for empty frames, got {result:?}"
+    );
 }
 
 #[test]
@@ -59,7 +59,10 @@ fn rejects_mismatched_frame_dimensions() {
         "metadata": null,
     });
     let result: Result<Content, _> = serde_json::from_value(bad);
-    assert!(result.is_err(), "expected error for mismatched dims, got {result:?}");
+    assert!(
+        result.is_err(),
+        "expected error for mismatched dims, got {result:?}"
+    );
 }
 
 #[test]
