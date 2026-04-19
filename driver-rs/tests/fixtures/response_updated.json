@@ -1,0 +1,32 @@
+{
+  "playlist": [
+    {
+      "content_id": "test-content-1",
+      "frames": [
+        {
+          "data_b64": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "duration_ms": 500,
+          "height": 14,
+          "metadata": null,
+          "width": 28
+        },
+        {
+          "data_b64": "/////////////////////////////////////////////////////////////////w==",
+          "duration_ms": null,
+          "height": 14,
+          "metadata": null,
+          "width": 28
+        }
+      ],
+      "metadata": {
+        "source": "fixture"
+      },
+      "playback": {
+        "loop": true,
+        "loop_count": 2
+      }
+    }
+  ],
+  "poll_interval_ms": 30000,
+  "status": "updated"
+}
