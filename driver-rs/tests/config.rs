@@ -1,7 +1,7 @@
 use flipdot_driver::models::DriverConfig;
 
 const FIXTURE: &str = include_str!("fixtures/driver_config.json");
-const EXAMPLE_CONFIG: &str = include_str!("../../flipdot/config.example.json");
+const EXAMPLE_CONFIG: &str = include_str!("../config.example.json");
 
 #[test]
 fn deserializes_fixture() {
@@ -18,8 +18,8 @@ fn deserializes_fixture() {
 }
 
 #[test]
-fn deserializes_actual_example_config_from_python_package() {
-    // Same file the Python driver ships — must parse identically.
+fn deserializes_actual_example_config() {
+    // Shared example config file — must parse identically.
     let cfg: DriverConfig = serde_json::from_str(EXAMPLE_CONFIG).unwrap();
     assert_eq!(cfg.serial_baudrate, 57600);
     assert_eq!(cfg.module_width, 28);

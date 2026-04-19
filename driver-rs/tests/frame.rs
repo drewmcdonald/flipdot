@@ -52,6 +52,33 @@ fn to_bit_array_unpacks_little_endian_row_major() {
 }
 
 #[test]
+fn deserializes_convex_float_numbers() {
+    // Convex exports JS numbers as Float64, so integer-valued fields
+    // arrive as e.g. 14.0 instead of 14. Regression test for that.
+    let json = r#"{
+        "data_b64": "AQ==",
+        "width": 28.0,
+        "height": 14.0,
+        "duration_ms": 500.0,
+        "metadata": null
+    }"#;
+    let frame: Frame = serde_json::from_str(json).expect("should accept float-encoded integers");
+    assert_eq!(frame.width, 28);
+    assert_eq!(frame.height, 14);
+    assert_eq!(frame.duration_ms, Some(500));
+}
+
+#[test]
+fn rejects_non_integer_float() {
+    let json = r#"{"data_b64":"AQ==","width":28.5,"height":14,"metadata":null}"#;
+    let err = serde_json::from_str::<Frame>(json).unwrap_err();
+    assert!(
+        err.to_string().contains("integer"),
+        "expected integer-coercion error, got: {err}"
+    );
+}
+
+#[test]
 fn round_trip_serialization_preserves_fixture() {
     let frame: Frame = serde_json::from_str(FIXTURE_SINGLE).unwrap();
     let reserialized = serde_json::to_value(&frame).unwrap();

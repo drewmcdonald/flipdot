@@ -1,4 +1,4 @@
-//! Convex subscription client. Mirrors flipdot/convex_client.py.
+//! Convex subscription client. Ported from the legacy Python implementation.
 //!
 //! Runs a background tokio task that subscribes to `displays:getCurrentDisplay`
 //! and forwards updates to the main driver loop via an mpsc channel.

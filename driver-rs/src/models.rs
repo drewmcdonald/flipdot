@@ -8,12 +8,44 @@ pub enum DecodeError {
     InvalidBase64(#[from] base64::DecodeError),
 }
 
+// Convex exports numeric fields as f64 (Float64), so `14` arrives as `14.0`.
+// Accept any JSON number and coerce to u32 if it's a non-negative integer value.
+fn deser_u32_lenient<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    let n = serde_json::Number::deserialize(d)?;
+    number_to_u32::<D>(&n)
+}
+
+fn deser_opt_u32_lenient<'de, D: Deserializer<'de>>(d: D) -> Result<Option<u32>, D::Error> {
+    let n: Option<serde_json::Number> = Option::deserialize(d)?;
+    n.map(|n| number_to_u32::<D>(&n)).transpose()
+}
+
+fn number_to_u32<'de, D: Deserializer<'de>>(n: &serde_json::Number) -> Result<u32, D::Error> {
+    if let Some(i) = n.as_u64() {
+        u32::try_from(i).map_err(|_| D::Error::custom(format!("{i} exceeds u32 range")))
+    } else if let Some(f) = n.as_f64() {
+        if f.is_finite() && f >= 0.0 && f <= u32::MAX as f64 && f.fract() == 0.0 {
+            Ok(f as u32)
+        } else {
+            Err(D::Error::custom(format!(
+                "expected non-negative integer, got {f}"
+            )))
+        }
+    } else {
+        Err(D::Error::custom(format!(
+            "expected non-negative integer, got {n}"
+        )))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Frame {
     pub data_b64: String,
+    #[serde(deserialize_with = "deser_u32_lenient")]
     pub width: u32,
+    #[serde(deserialize_with = "deser_u32_lenient")]
     pub height: u32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deser_opt_u32_lenient")]
     pub duration_ms: Option<u32>,
     #[serde(default)]
     pub metadata: Option<serde_json::Value>,
@@ -60,7 +92,7 @@ impl<'de> Deserialize<'de> for PlaybackMode {
         struct Raw {
             #[serde(default, rename = "loop")]
             looping: bool,
-            #[serde(default)]
+            #[serde(default, deserialize_with = "deser_opt_u32_lenient")]
             loop_count: Option<u32>,
         }
         let raw = Raw::deserialize(d)?;
@@ -237,7 +269,7 @@ impl<'de> Deserialize<'de> for ContentResponse {
             status: ResponseStatus,
             #[serde(default)]
             playlist: Vec<Content>,
-            #[serde(default = "default_poll_interval")]
+            #[serde(default = "default_poll_interval", deserialize_with = "deser_u32_lenient")]
             poll_interval_ms: u32,
         }
         fn default_poll_interval() -> u32 {

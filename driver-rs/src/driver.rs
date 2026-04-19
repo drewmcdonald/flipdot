@@ -1,4 +1,4 @@
-//! Driver orchestration. Mirrors flipdot/main.py::FlipDotDriver.
+//! Driver orchestration. Ported from the legacy Python driver implementation.
 
 use crate::convex_client::{ContentMessage, ConvexContentClient};
 use crate::hardware::Panel;

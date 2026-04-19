@@ -43,6 +43,12 @@ async fn main() -> Result<()> {
     let config = load_config(&cli.config)?;
     init_logging(&config.log_level);
 
+    // rustls 0.23 requires an explicit crypto provider; convex's
+    // rustls-tls-webpki-roots feature doesn't pick one.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .map_err(|_| anyhow::anyhow!("failed to install rustls crypto provider"))?;
+
     info!(
         version = env!("CARGO_PKG_VERSION"),
         "starting flipdot driver"

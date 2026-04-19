@@ -1,4 +1,4 @@
-//! Driver limits and tuning constants (port of flipdot/config.py).
+//! Driver limits and tuning constants (port of legacy Python driver config).
 
 #[derive(Debug, Clone, Copy)]
 pub struct SerialLimits {
