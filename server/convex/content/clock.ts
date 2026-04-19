@@ -9,6 +9,8 @@ import type { Content } from "../types";
 import { createFrame, DISPLAY_HEIGHT, DISPLAY_WIDTH } from "../rendering/frame";
 import { DEFAULT_FONT, getFont, renderText } from "../rendering/fontLoader";
 
+const SOURCE_ID = "clock";
+
 /**
  * Generate content ID for clock based on current time
  */
@@ -25,15 +27,18 @@ function getClockContentId(
 /**
  * Generate clock content for the current time
  */
-function generateClockContent(fontName: string = DEFAULT_FONT): Content {
+function generateClockContent(
+  fontName: string = DEFAULT_FONT,
+  timezone: string = "America/New_York"
+): Content {
   const now = new Date();
 
-  // Get Eastern time (America/New_York - handles EST/EDT automatically)
-  const easternTime = new Date(
-    now.toLocaleString("en-US", { timeZone: "America/New_York" })
+  // Get time in configured timezone
+  const localTime = new Date(
+    now.toLocaleString("en-US", { timeZone: timezone })
   );
-  const hour = easternTime.getHours();
-  const minute = easternTime.getMinutes();
+  const hour = localTime.getHours();
+  const minute = localTime.getMinutes();
 
   // Format time as "HH:MM"
   const hourStr = hour.toString().padStart(2, "0");
@@ -59,6 +64,7 @@ function generateClockContent(fontName: string = DEFAULT_FONT): Content {
       type: "clock",
       time: timeText,
       font: fontName,
+      timezone,
       timestamp: now.toISOString(),
     },
   };
@@ -71,12 +77,21 @@ function generateClockContent(fontName: string = DEFAULT_FONT): Content {
 export const generateClock = internalAction({
   args: {},
   handler: async (ctx) => {
-    // Generate clock content
-    const content = generateClockContent(DEFAULT_FONT);
+    // Read config for generator settings
+    const config = await ctx.runQuery(internal.display_config.getConfig, {
+      display_name: "main",
+    });
 
-    // Update the main display
-    await ctx.runMutation(internal.displays.updateDisplay, {
-      name: "main",
+    const clockSettings = config?.generator_settings?.clock;
+    const fontName = clockSettings?.font ?? DEFAULT_FONT;
+    const timezone = clockSettings?.timezone ?? "America/New_York";
+
+    // Generate clock content
+    const content = generateClockContent(fontName, timezone);
+
+    // Write to content_sources — the compositor will pick this up
+    await ctx.runMutation(internal.content_sources.updateSource, {
+      source_id: SOURCE_ID,
       content: {
         content_id: content.content_id,
         frames: content.frames.map((f) => ({
@@ -91,6 +106,6 @@ export const generateClock = internalAction({
       },
     });
 
-    console.log(`Clock updated: ${content.metadata?.time}`);
+    console.log(`Clock updated: ${content.metadata?.time} (${timezone})`);
   },
 });

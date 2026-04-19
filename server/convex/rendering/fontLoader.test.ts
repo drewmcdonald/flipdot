@@ -8,7 +8,6 @@ import {
   renderScrollingText,
   AVAILABLE_FONTS,
   DEFAULT_FONT,
-  DISPLAY_BASELINE,
   type FontData,
 } from "./fontLoader";
 
