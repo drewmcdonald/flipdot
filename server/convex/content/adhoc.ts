@@ -6,6 +6,7 @@ import { mutation } from "../_generated/server";
 import { v } from "convex/values";
 import { getFont, renderText, renderScrollingText } from "../rendering/fontLoader";
 import { createFrame, DISPLAY_WIDTH, DISPLAY_HEIGHT } from "../rendering/frame";
+import { requireAuth } from "../lib/requireAuth";
 
 /** Send a text message to the display */
 export const sendText = mutation({
@@ -17,6 +18,7 @@ export const sendText = mutation({
     scroll: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     const displayName = args.display_name ?? "main";
     const fontName = args.font ?? "axion_6x7";
     const font = getFont(fontName);
@@ -79,6 +81,7 @@ export const sendText = mutation({
 export const removeSource = mutation({
   args: { source_id: v.string() },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     // Remove from content_sources
     const source = await ctx.db
       .query("content_sources")
