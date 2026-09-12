@@ -1,7 +1,5 @@
 # Server (Convex Backend + React Frontend)
 
-For detailed Convex API reference (validators, function registration, queries, mutations, actions, crons, etc.), see [CONVEX_REFERENCE.md](./CONVEX_REFERENCE.md).
-
 ## Commands
 
 ```bash
