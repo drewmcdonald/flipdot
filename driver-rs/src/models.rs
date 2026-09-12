@@ -269,7 +269,10 @@ impl<'de> Deserialize<'de> for ContentResponse {
             status: ResponseStatus,
             #[serde(default)]
             playlist: Vec<Content>,
-            #[serde(default = "default_poll_interval", deserialize_with = "deser_u32_lenient")]
+            #[serde(
+                default = "default_poll_interval",
+                deserialize_with = "deser_u32_lenient"
+            )]
             poll_interval_ms: u32,
         }
         fn default_poll_interval() -> u32 {
