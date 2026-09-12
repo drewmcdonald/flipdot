@@ -99,8 +99,15 @@ install_binary() {
 
 ensure_config() {
     if [ -f "$FLIPDOT_HOME/config.json" ]; then
-        log_info "preserving existing $FLIPDOT_HOME/config.json"
-        return
+        if grep -q '"convex_url"' "$FLIPDOT_HOME/config.json"; then
+            log_info "preserving existing $FLIPDOT_HOME/config.json"
+            return
+        fi
+        local backup
+        backup="$FLIPDOT_HOME/config.json.incompatible.$(date +%s)"
+        log_warn "existing config.json has no convex_url -- it's from an older/incompatible driver version"
+        log_warn "moving it to $backup and writing a fresh template"
+        mv "$FLIPDOT_HOME/config.json" "$backup"
     fi
     cat > "$FLIPDOT_HOME/config.json" <<'EOF'
 {
