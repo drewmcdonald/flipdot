@@ -1,0 +1,28 @@
+[Unit]
+Description=FlipDot Display Driver
+Documentation=https://github.com/drewmcdonald/flipdot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=flipdot
+WorkingDirectory=/opt/flipdot
+ExecStart=/opt/flipdot/bin/flipdot --config /opt/flipdot/config.json
+Restart=always
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=flipdot
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/flipdot
+MemoryMax=128M
+CPUQuota=25%
+
+[Install]
+WantedBy=multi-user.target

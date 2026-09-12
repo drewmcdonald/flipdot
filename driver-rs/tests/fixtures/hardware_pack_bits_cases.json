@@ -1,0 +1,61 @@
+[
+  {
+    "name": "empty",
+    "bits": [],
+    "expected_hex": ""
+  },
+  {
+    "name": "single_bit_0",
+    "bits": [
+      1
+    ],
+    "expected_hex": "01"
+  },
+  {
+    "name": "eight_alternating",
+    "bits": [
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+    ],
+    "expected_hex": "55"
+  },
+  {
+    "name": "nine_bits_last_on",
+    "bits": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "expected_hex": "0001"
+  },
+  {
+    "name": "twelve_all_on",
+    "bits": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "expected_hex": "ff0f"
+  }
+]

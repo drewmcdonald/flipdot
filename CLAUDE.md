@@ -1,20 +1,21 @@
 # FlipDot v2.0
 
-Lightweight driver + content server for flipdot displays. The driver (Python) runs on a Raspberry Pi, subscribes to real-time updates from a Convex backend (TypeScript), and sends frames over serial to the hardware.
+Lightweight driver + content server for flipdot displays. The driver (Rust) runs on a Raspberry Pi, subscribes to real-time updates from a Convex backend (TypeScript), and sends frames over serial to the hardware.
 
 ## Monorepo Structure
 
-- `flipdot/` - Python driver package (runs on Pi, talks to hardware)
+- `driver-rs/` - Rust driver package (runs on Pi, talks to hardware)
 - `server/` - Convex backend + React virtual display (content generation & serving)
 
 ## Commands
 
 ```bash
-# Python driver
-poetry install --with dev
-poetry run pytest flipdot/tests/test_driver.py     # tests
-poetry run basedpyright flipdot                     # type checking (CI)
-poetry run ruff check flipdot                       # linting (CI)
+# Rust driver
+cd driver-rs
+cargo build                                         # build
+cargo test                                          # tests
+cargo clippy                                        # linting (CI)
+cargo fmt --all -- --check                          # formatting (CI)
 
 # Server
 cd server && npm install
@@ -26,17 +27,17 @@ npm run lint                                        # eslint
 ## Architecture
 
 ```
-[Convex Backend]  ──real-time subscription──>  [Python Driver]  ──serial──>  [FlipDot Hardware]
+[Convex Backend]  ──real-time subscription──>  [Rust Driver]  ──serial──>  [FlipDot Hardware]
        │                                              │
-   cron: clock                                   ContentQueue
-   rendering pipeline                            Panel → FlippyModule
+   cron: clock                                   ConvexClient
+   rendering pipeline                            Driver
    displays table                                SerialConnection
        │
 [React Virtual Display]  (dev/testing UI, subscribes to same query)
 ```
 
 - Single Convex table `displays` stores content per named display (e.g. "main")
-- Driver subscribes to `displays:getCurrentDisplay` query via Convex Python SDK
+- Driver subscribes to `displays:getCurrentDisplay` query via Convex Rust SDK
 - Content is a playlist of `Content` items, each with `Frame`s (base64-encoded bit arrays)
 - Display dimensions: **28x14 pixels** (two 28x7 modules stacked vertically)
 

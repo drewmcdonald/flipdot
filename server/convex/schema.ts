@@ -1,10 +1,13 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 /**
  * Convex schema for FlipDot display server
  */
 export default defineSchema({
+  ...authTables,
+
   /**
    * Displays table - stores current content for each named display
    */

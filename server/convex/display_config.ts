@@ -5,6 +5,7 @@
 
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireAuth } from "./lib/requireAuth";
 
 /** Read config for a display */
 export const getConfig = internalQuery({
@@ -37,6 +38,7 @@ export const updateConfig = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     const existing = await ctx.db
       .query("display_config")
       .withIndex("by_display_name", (q) =>
@@ -83,6 +85,7 @@ export const updateGeneratorSettings = mutation({
     }),
   },
   handler: async (ctx, args) => {
+    await requireAuth(ctx);
     const config = await ctx.db
       .query("display_config")
       .withIndex("by_display_name", (q) =>

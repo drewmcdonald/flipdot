@@ -49,7 +49,7 @@ export interface Content {
 export type ResponseStatus = "updated" | "clear";
 
 /**
- * Top-level response from GET /api/flipdot/content
+ * Top-level content response
  * Server sends complete playlist - driver plays in order
  */
 export interface ContentResponse {
