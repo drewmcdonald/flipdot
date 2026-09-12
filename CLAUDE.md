@@ -33,7 +33,7 @@ npm run lint                                        # eslint
    rendering pipeline                            Driver
    displays table                                SerialConnection
        │
-[React Virtual Display]  (dev/testing UI, subscribes to same query)
+[React Virtual Display]  (subscribes to same query, served by Convex HTTP Actions -- see server/CLAUDE.md)
 ```
 
 - Single Convex table `displays` stores content per named display (e.g. "main")
